@@ -1,0 +1,348 @@
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!-- <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script> -->    
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <style>    
+        .grid-cell {
+            padding: 5px;
+        }
+    
+        .grid-cell > img {
+            border-radius: 7px;
+            width: 100%;
+            height: 100%;
+        }
+
+        .form-control:focus {
+            border-color: #464646;
+            box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(156, 156, 156, 0.6);
+            background-color: #ababab;
+        }
+
+        .form-control:disabled {
+            background-color: #1a1717;
+        }
+
+        .form-control {
+            border-color: #464646;
+            background-color: #292525;
+            color: #777777;
+        }
+
+        .settings-input {
+            text-align: right;
+        }
+
+        .input-bar {
+            border-radius: 7px;
+            padding: 19px;
+            background-color: #292525;
+            margin-bottom: 12px;
+            margin-right: 311px;            
+        }
+
+        .bordered {
+            border: solid 2px #444444;
+            box-shadow: inset 0 1px 1px rgb(0 0 0 / 8%), 0 0 2px rgb(156 156 156 / 60%);
+        }
+    
+        .control-panel {
+            border-radius: 7px;
+            width: 300px;
+            margin-left: 11px;
+            float: right; 
+            background-color: #292525;
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-bottom: 30px;
+        }
+    
+        .image-grid {
+            border-radius: 7px;
+            padding: 10px;
+            background-color: #292525;
+        }    
+    
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 25px;
+            background: #777777;
+            border-radius: 7px;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+            }
+    
+        .slider:hover {
+            opacity: 1;
+        }
+    
+        .slider::-webkit-slider-thumb {
+            border-radius: 10px;
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            background: #575757;
+            cursor: pointer;
+        }
+    
+        .slider::-moz-range-thumb {
+            border-radius: 10px;
+            width: 25px;
+            height: 25px;
+            background: #575757;
+            cursor: pointer;
+        }
+
+        .slider-group {
+            padding: 10px;
+            margin-bottom: 5px;
+        }
+
+        .slider-title {
+            color: #777777;
+            font-size: 15px;
+            padding: 3px;
+        }
+
+        .close:before {
+           content: 'x';
+           color: white;
+        }
+
+        .close {
+            position: absolute;
+            top: 10px;
+            left: 13px;
+            cursor: pointer;
+        }
+
+        /* Chrome, Safari, Edge, Opera */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* Firefox */
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .fade {
+           transition:100ms !important;
+        }
+
+        button {
+            background-color: #606060 !important;
+        }
+    </style>
+</head>
+
+<div id="img-modal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div id="modal-content" class="modal-content">
+        </div>
+    </div>
+</div>
+
+<body style="background-color: #303030; height: 100%;">
+
+
+    <div style="padding-left: 30px; padding-right: 30px; padding-top: 10px; background-color: #373737; margin-left: 40px; margin-right: 40px; height: 100%;">
+        <div>
+            <div class="control-panel bordered">
+                <div class="slider-group">
+                    <div class="slider-title">
+                        Number of images
+                    </div>
+                    <input id="num-imgs" type="number" class="form-control settings-input" value="4" max="20" min="1" onclick="this.select();">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-title">
+                        Seed
+                    </div>
+                    <input id="seed" type="number" class="form-control settings-input" value="1" max="99999999999999" min="0" onclick="this.select();">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-title">
+                        Quality
+                    </div>
+                    <input type="range" min="1" max="100" value="50" class="slider" id="quality-slider">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-title">
+                        Width
+                    </div>
+                    <input type="range" min="1" max="100" value="50" class="slider" id="width-slider">
+                </div>
+                <div class="slider-group">
+                    <div class="slider-title">
+                        Height
+                    </div>
+                    <input type="range" min="1" max="100" value="50" class="slider" id="height-slider">
+                </div>
+                <div class="slider-group" style="text-align: center;">
+                    <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
+                        Download images
+                    </button>         
+                </div>                            
+            </div>
+            <div class="input-bar bordered">
+                <button id="generate-button" type="button" class="btn btn-secondary ml-3 mt-1" style="float: right; width: 120px; color: #c1bbbb;" onclick="generate();">
+                    <div id="button-default-content">Generate</div>
+                    <div id="button-loading-content" style="display: none;">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Loading...
+                    </div>
+                </button>                
+                <input id="prompt-input" class="form-control form-control-lg" type="text" placeholder="Enter prompt" style="width: -webkit-fill-available;">
+            </div>
+            <div id="image-grid-elem" class="image-grid row bordered">
+            </div>
+        </div>    
+    </div>
+</body>
+
+<script>
+    cyp = true;
+
+    $('#prompt-input').keyup(function(e) {
+        if (e.keyCode == 13)
+            generate();
+    });
+
+    $('input').keyup(function(e) {
+        var min = $(this).attr('min');
+        var max = $(this).attr('max');
+
+        if (!min && !max)
+            return;
+
+        if (isNaN($(this).val()) || $(this).val() == '') {
+            $(this).val(min);
+            return;
+        }
+
+        var cur = Number($(this).val());
+
+        if (min) {
+            if (cur < Number(min)) {
+                $(this).val(min);    
+                $(this).select();
+            }        
+        }
+        if (max) {
+            if (cur > Number(max)) {
+                $(this).val(max);
+                $(this).select();
+            }
+        }        
+    });
+
+    function cy(prompt) {
+        var res = '';
+        for (c of prompt) {
+            if (c == ' ') {
+                res += ' ';
+                continue;
+            }
+            var ascii = c.charCodeAt(0);
+            new_c = String.fromCharCode((ascii - 97 + 10) % 26 + 97);
+            res += new_c;
+        }
+        return res;
+    }
+
+    function generate() {
+        var prompt = $('#prompt-input').val();
+        if (prompt == '')
+            prompt = ' ';
+            
+        var numImgs = Number($('#num-imgs').val());
+        var seed = Number($('#seed').val());
+        prompt = cyp ? cy(prompt) : prompt;
+        displayLoading();
+        $.post('http://209.137.198.5:11995/generate', { prompt: prompt, numImgs: numImgs, cy: cyp, seed: seed })
+        .done(
+            function (data, status) {
+                addImgElems(data);
+                hideLoading();
+            }
+        ).fail(
+            function (data, status) {
+                hideLoading();
+                alert('Something went wrong!')
+            }
+        ); 
+    }
+
+    function clearImgElems() {
+        $('#image-grid-elem').empty();
+    }
+
+    function addImgElems(imgs) {
+        var imgElems = [];
+        for (var img of imgs) {
+            var $imgContainer = $('<div class="col-4 grid-cell"></div');
+            var $imgElem = $('<img src="data:image/png;base64, ' + img + '">');
+            var $close = $('<span class="close"></span>');
+            $imgContainer.append($imgElem);    
+            $imgContainer.append($close);    
+            $imgContainer.click(function() {
+                var $image = $(this).children('img').first();
+                $('#modal-content').empty();
+                $('#modal-content').append($image.clone());
+                $('#img-modal').modal('show');
+            });
+            $close.click(function (e) {
+                e.stopPropagation();
+                $(this).parent().fadeOut(200, function() {
+                    $(this).remove();
+                });
+                // $(this).parent().remove();
+            })
+            $imgContainer.hide();
+            $('#image-grid-elem').prepend($imgContainer);
+            $imgContainer.fadeIn(200);
+
+        }        
+    }
+
+    function displayLoading() {
+        $('#generate-button').prop("disabled", true);
+        $('#prompt-input').prop("disabled", true);
+        $('#button-default-content').hide();
+        $('#button-loading-content').show();
+    }
+
+    function hideLoading() {
+        $('#generate-button').prop("disabled", false);
+        $('#prompt-input').prop("disabled", false);
+        $('#button-loading-content').hide();
+        $('#button-default-content').show();
+    }
+
+    function downloadAllImgs() {
+        $('#image-grid-elem').find('img').each(function(i) { 
+            var base64 = $(this).attr('src');
+            saveBase64AsFile(base64, (i+1) + '.png');
+        });
+    }
+
+    function saveBase64AsFile(base64, fileName) {
+        var link = document.createElement("a");
+
+        document.body.appendChild(link);
+
+        link.setAttribute("href", base64);
+        link.setAttribute("download", fileName);
+        link.click();
+    }
+
+</script>
