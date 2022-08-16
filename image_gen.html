@@ -1,10 +1,13 @@
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <!-- <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script> -->    
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <style>    
+    <style>   
+        :root {
+            --text-color: #777777;
+        }
+        
         .grid-cell {
             padding: 5px;
         }
@@ -28,11 +31,12 @@
         .form-control {
             border-color: #464646;
             background-color: #292525;
-            color: #777777;
+            color: var(--text-color);
         }
 
         .settings-input {
             text-align: right;
+            margin-top: 6px;
         }
 
         .input-bar {
@@ -75,7 +79,8 @@
             opacity: 0.7;
             -webkit-transition: .2s;
             transition: opacity .2s;
-            }
+            margin-top: 6px;
+        }
     
         .slider:hover {
             opacity: 1;
@@ -105,9 +110,19 @@
         }
 
         .slider-title {
-            color: #777777;
+            color: var(--text-color);
             font-size: 15px;
             padding: 3px;
+            margin-bottom: 5px;            
+            display: inline;
+        }
+
+        .slider-val {
+            color: var(--text-color);
+            font-size: 13px;
+            padding: 3px;
+            margin-bottom: 5px;
+            display: inline;
         }
 
         .close:before {
@@ -152,11 +167,9 @@
 </div>
 
 <body style="background-color: #303030; height: 100%;">
-
-
     <div style="padding-left: 30px; padding-right: 30px; padding-top: 10px; background-color: #373737; margin-left: 40px; margin-right: 40px; height: 100%;">
         <div>
-            <div class="control-panel bordered">
+            <div id="control-panel-elem" class="control-panel bordered">
                 <div class="slider-group">
                     <div class="slider-title">
                         Number of images
@@ -168,24 +181,6 @@
                         Seed
                     </div>
                     <input id="seed" type="number" class="form-control settings-input" value="1" max="99999999999999" min="0" onclick="this.select();">
-                </div>
-                <div class="slider-group">
-                    <div class="slider-title">
-                        Quality
-                    </div>
-                    <input type="range" min="1" max="100" value="50" class="slider" id="quality-slider">
-                </div>
-                <div class="slider-group">
-                    <div class="slider-title">
-                        Width
-                    </div>
-                    <input type="range" min="1" max="100" value="50" class="slider" id="width-slider">
-                </div>
-                <div class="slider-group">
-                    <div class="slider-title">
-                        Height
-                    </div>
-                    <input type="range" min="1" max="100" value="50" class="slider" id="height-slider">
                 </div>
                 <div class="slider-group" style="text-align: center;">
                     <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
@@ -210,6 +205,13 @@
 </body>
 
 <script>
+    var sliderOptionArr = [
+        { name: 'Width', id: 'width-slider', minVal: 200, maxVal: 800, sdName: 'W' },
+        { name: 'Height', id: 'height-slider', minVal: 200, maxVal: 800, sdName: 'H' },
+    ];
+
+    initSliders(sliderOptionArr);
+
     cyp = true;
 
     $('#prompt-input').keyup(function(e) {
@@ -267,8 +269,15 @@
         var numImgs = Number($('#num-imgs').val());
         var seed = Number($('#seed').val());
         prompt = cyp ? cy(prompt) : prompt;
+
+        data = { prompt: prompt, n_iter: numImgs, cy: cyp, seed: seed };
+
+        for (var sliderOpts of sliderOptionArr) {
+            data[sliderOpts.name] = $('#' + sliderOpts.id).val().toLowerCase();
+        }
+
         displayLoading();
-        $.post('http://209.137.198.5:11995/generate', { prompt: prompt, numImgs: numImgs, cy: cyp, seed: seed })
+        $.post('http://209.137.198.5:17223/generate', data)
         .done(
             function (data, status) {
                 addImgElems(data);
@@ -305,13 +314,51 @@
                 $(this).parent().fadeOut(200, function() {
                     $(this).remove();
                 });
-                // $(this).parent().remove();
             })
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
 
         }        
+    }
+
+    function initSliders(sliderOptionArr) {
+        for (var sliderOptions of sliderOptionArr) {
+            var $sliderElem = createSlider(sliderOptions);
+            $sliderElem.insertBefore($('#control-panel-elem').children().last());
+        }
+    }
+
+    function createSlider(options) {
+        var defaultVal = options.defaultVal;
+        var name = options.name;
+        var id = options.id;
+        var minVal = options.minVal;
+        var maxVal = options.maxVal;
+        var valDisplayId = id + '-val';
+
+        if (defaultVal == null)
+            defaultVal = (minVal + maxVal) / 2;
+
+        var groupElem = '<div class="slider-group"></div>';
+        var labelElem = '<div class="slider-title">' + name + ':</div>';
+        var valDisplayElem = '<div id="' + valDisplayId + '" class="slider-val">' + defaultVal + '</div>';
+        var sliderElem = '<input id="' + id + '" type="range" min="' + minVal + '" max="' + maxVal + '" value="' + defaultVal + '" class="slider" id="width-slider">';
+
+        $groupElem = $(groupElem);
+        $labelElem = $(labelElem);
+        $valDisplayElem = $(valDisplayElem);
+        $sliderElem = $(sliderElem);
+
+        $sliderElem.on('input', function () {
+            $('#' + valDisplayId).html($(this).val());
+        })
+
+        $groupElem.append($labelElem);
+        $groupElem.append($valDisplayElem);
+        $groupElem.append($sliderElem);
+
+        return $groupElem;
     }
 
     function displayLoading() {

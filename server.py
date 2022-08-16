@@ -96,15 +96,16 @@ class S(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = parse_qs(post_data.decode(), strict_parsing=True)
-            prompt = data['prompt'][0]
-            num_imgs = int(data['numImgs'][0])
-            seed = int(data['seed'][0])
-            cyph = data['cy'][0] == 'true'
+            for x, y in thisdict.items():
+                data[x] = y[0]
+
+            cyph = data['cy'] == 'true'
             if cyph:
-                prompt = decypher(prompt)
+                data['prompt'] = decypher(prompt)
 
             print('running txt2img with prompt')
-            images = txt2img.main(prompt, num_imgs, seed, server.model)        
+            images = txt2img.main(data)
+
             resp = []
             for img in images:
                 buffered = BytesIO()
