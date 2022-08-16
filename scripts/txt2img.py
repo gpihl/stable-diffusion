@@ -14,12 +14,10 @@ from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
 from collections import namedtuple
 from omegaconf import OmegaConf
+from ldm.util import instantiate_from_config
 
 def main(input_opt, model, device):
     parser = argparse.ArgumentParser()
-
-    print('entering main')
-    print(input_opt)
     input_opt['batch_size'] = int(input_opt['batch_size'])
     input_opt['W'] = int(input_opt['W'])
     input_opt['H'] = int(input_opt['H'])
@@ -40,15 +38,12 @@ def main(input_opt, model, device):
         'precision': 'autocast',
     }
 
-    print('updating dict')
-
     opt.update(input_opt)
     opt = namedtuple("ObjectName", opt.keys())(*opt.values())
 
-    print(opt)
-
     seed_everything(opt.seed)
     sampler = PLMSSampler(model)
+    # sampler = DDIMSampler(model)
     data = [opt.batch_size * [opt.prompt]]
 
     start_code = None
@@ -56,7 +51,7 @@ def main(input_opt, model, device):
         start_code = torch.randn([opt.batch_size, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
 
     images = []
-        
+
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     with torch.no_grad():
         with precision_scope("cuda"):
@@ -69,6 +64,7 @@ def main(input_opt, model, device):
 
                         c = model.get_learned_conditioning(prompts)
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                        print(shape)
                         samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                          conditioning=c,
                                                          batch_size=opt.batch_size,
@@ -90,16 +86,33 @@ def main(input_opt, model, device):
     
     return images
 
+# def init_model():
+#     config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
+#     model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt")
 
-def init_model():
-    config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
-    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt")
-
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    model = model.to(device)
+#     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+#     model = model.to(device)
     
-    return model, device
+#     return model, device
 
+# def load_model_from_config(config, ckpt, verbose=False):
+#     print(f"Loading model from {ckpt}")
+#     pl_sd = torch.load(ckpt, map_location="cpu")
+#     if "global_step" in pl_sd:
+#         print(f"Global Step: {pl_sd['global_step']}")
+#     sd = pl_sd["state_dict"]
+#     model = instantiate_from_config(config.model)
+#     m, u = model.load_state_dict(sd, strict=False)
+#     if len(m) > 0 and verbose:
+#         print("missing keys:")
+#         print(m)
+#     if len(u) > 0 and verbose:
+#         print("unexpected keys:")
+#         print(u)
+
+#     model.cuda()
+#     model.eval()
+#     return model
 
 # model, device = init_model()
 # main({}, model, device)

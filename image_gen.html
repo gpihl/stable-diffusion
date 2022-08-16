@@ -9,13 +9,40 @@
         }
         
         .grid-cell {
-            padding: 5px;
+            text-align: center;
+            margin-bottom: 6px;
         }
+
+        .horizontal-img {
+            width: 100%;
+            transform: translate(-50%, -50%);
+            top: 50%;
+            border-radius: 7px;
+        }
+
+        .vertical-img {
+            height: 100%;
+            transform: translateX(-50%); 
+            border-radius: 7px;            
+        }
+
+        .zoom-img {
+            margin: auto;
+        }
+
+        .grid-cell:after {
+            content: "s";
+            display: block;
+            padding-bottom: 100%;
+            color: #00000000;
+        }        
     
         .grid-cell > img {
-            border-radius: 7px;
-            width: 100%;
-            height: 100%;
+            position: absolute;
+        }
+
+        img:hover {
+            cursor: pointer;
         }
 
         .form-control:focus {
@@ -126,14 +153,15 @@
         }
 
         .close:before {
-           content: 'x';
+           content: '\00d7';
            color: white;
+           font-size: 30px;
         }
 
         .close {
             position: absolute;
-            top: 10px;
-            left: 13px;
+            top: 0px;
+            left: 7px;
             cursor: pointer;
         }
 
@@ -160,6 +188,12 @@
         .modal-dialog {
             max-width: 1000px !important;
         }
+
+        .modal-content {
+            max-width: fit-content;
+            margin: auto;
+            /* background: transparent; */
+        }
     </style>
 </head>
 
@@ -184,7 +218,7 @@
                     <div class="slider-title">
                         Seed
                     </div>
-                    <input id="seed" type="number" class="form-control settings-input" value="1" max="99999999999999" min="0" onclick="this.select();">
+                    <input id="seed" type="number" class="form-control settings-input" value="0" max="99999999999999" min="0" onclick="this.select();">
                 </div>
                 <div class="slider-group" style="text-align: center;">
                     <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
@@ -210,8 +244,8 @@
 
 <script>
     var sliderOptionArr = [
-        { name: 'Width', id: 'width-slider', minVal: 200, maxVal: 800, sdName: 'W' },
-        { name: 'Height', id: 'height-slider', minVal: 200, maxVal: 800, sdName: 'H' },
+        { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64 },
+        { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64 },
     ];
 
     initSliders(sliderOptionArr);
@@ -272,6 +306,8 @@
             
         var numImgs = Number($('#num-imgs').val());
         var seed = Number($('#seed').val());
+
+        seed = seed ? seed : Math.floor(Math.random() * 9999999999);
         prompt = cyp ? cy(prompt) : prompt;
 
         data = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
@@ -281,7 +317,7 @@
         }
 
         displayLoading();
-        $.post('http://209.137.198.5:17223/generate', data)
+        $.post('http://209.137.198.5:18284/generate', data)
         .done(
             function (data, status) {
                 addImgElems(data);
@@ -303,14 +339,23 @@
         var imgElems = [];
         for (var img of imgs) {
             var $imgContainer = $('<div class="col-4 grid-cell"></div');
-            var $imgElem = $('<img src="data:image/png;base64, ' + img + '">');
+            i = new Image();
+            i.onload = function() {
+                if (i.width > i.height) {
+                    $(this).addClass('horizontal-img');
+                } else {
+                    $(this).addClass('vertical-img');
+                }
+            };
+            i.src = 'data:image/png;base64, ' + img;
+            var $imgElem = $(i);
             var $close = $('<span class="close"></span>');
             $imgContainer.append($imgElem);    
             $imgContainer.append($close);    
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
                 $('#modal-content').empty();
-                $('#modal-content').append($image.clone());
+                $('#modal-content').append($image.clone().removeClass().addClass('zoom-img'));
                 $('#img-modal').modal('show');
             });
             $close.click(function (e) {
@@ -340,6 +385,7 @@
         var minVal = options.minVal;
         var maxVal = options.maxVal;
         var valDisplayId = id + '-val';
+        var quantizeVal = options.quantizeVal;
 
         if (defaultVal == null)
             defaultVal = (minVal + maxVal) / 2;
@@ -355,6 +401,10 @@
         $sliderElem = $(sliderElem);
 
         $sliderElem.on('input', function () {
+            var val = $(this).val();
+            val = Math.round(val / quantizeVal);
+            val *= quantizeVal;
+            $(this).val(val);
             $('#' + valDisplayId).html($(this).val());
         })
 
