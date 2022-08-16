@@ -97,7 +97,7 @@
             padding: 10px;
             padding-top: 13px;
             background-color: #292525;
-            min-height: 352px;
+            min-height: 430px;
         }    
     
         .slider {
@@ -278,6 +278,7 @@
     ];
 
     initSliders(sliderOptionArr);
+
     $(function(){
         $('html').keydown(function(e){
             if ($('#img-modal').hasClass('show') && (e.keyCode == 37 || e.keyCode == 39)) {
@@ -293,6 +294,11 @@
             }
         });
     });
+
+    $('#prompt-input').keyup(function(e) {
+        if (e.keyCode == 13)
+            generate();
+    });    
 
     cyp = true;
 
@@ -324,6 +330,10 @@
         }        
     });
 
+    function isCharacterALetter(char) {
+        return (/[a-zA-Z]/).test(char);
+    }    
+
     function indexImgs() {
         $('#image-grid-elem').children().each(function (i) {
             $(this).children('img').first().attr('idx', i);
@@ -333,8 +343,8 @@
     function cy(prompt) {
         var res = '';
         for (c of prompt) {
-            if (c == ' ') {
-                res += ' ';
+            if (!isCharacterALetter(c)) {
+                res += c;
                 continue;
             }
             var ascii = c.charCodeAt(0);
@@ -347,10 +357,10 @@
     function decy(prompt) {
         var res = '';
         for (c of prompt) {
-            if (c == ' ') {
-                res += ' ';
+            if (!isCharacterALetter(c)) {
+                res += c;
                 continue;
-            }
+            }            
             var asciiVal = c.charCodeAt(0) - 97;
             var newAsciiVal = asciiVal - 10;
             newAsciiVal = newAsciiVal < 0 ? newAsciiVal + 26 : newAsciiVal;

@@ -42,18 +42,18 @@ def load_model_from_config(config, ckpt, verbose=False):
     model.eval()
     return model
 
-def cypher(prompt):
-    res = ''
-    for c in prompt:
-        new_c = chr((ord(c) - 97 + 10) % 26 + 97)
-        res += new_c
-    return res
+# def cypher(prompt):
+#     res = ''
+#     for c in prompt:
+#         new_c = chr((ord(c) - 97 + 10) % 26 + 97)
+#         res += new_c
+#     return res
 
 def decypher(prompt):
     res = ''
     for c in prompt:
-        if c == ' ':
-            res += ' '
+        if not c.isalpha():
+            res += c
             continue
             
         ascii_val = ord(c) - 97
