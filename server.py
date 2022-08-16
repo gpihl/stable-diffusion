@@ -8,7 +8,8 @@ from time import sleep
 from PIL import Image
 from io import BytesIO
 from urllib.parse import parse_qs
-import scripts.txt2img as txt2img
+import scripts.txt2img
+import imp
 from omegaconf import OmegaConf
 import torch
 from ldm.util import instantiate_from_config
@@ -85,7 +86,7 @@ class S(BaseHTTPRequestHandler):
         try:
             if self.path != '/generate':
                 return
-
+            
             server = self.server
 
             if server.lock:
@@ -104,7 +105,8 @@ class S(BaseHTTPRequestHandler):
                 data['prompt'] = decypher(data['prompt'])
 
             print('running txt2img with prompt')
-            images = txt2img.main(data, server.model, server.device)
+            imp.reload(scripts.txt2img)
+            images = scripts.txt2img.main(data, server.model, server.device)
 
             resp = []
             for img in images:

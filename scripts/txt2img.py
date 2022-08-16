@@ -38,6 +38,8 @@ def main(input_opt, model, device):
         'precision': 'autocast',
     }
 
+    print('bajs fluss')
+
     opt.update(input_opt)
     opt = namedtuple("ObjectName", opt.keys())(*opt.values())
 
@@ -48,7 +50,15 @@ def main(input_opt, model, device):
 
     start_code = None
     if opt.fixed_code:
-        start_code = torch.randn([opt.batch_size, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+        tensors = []
+        seed = opt.seed
+        for i in range(opt.batch_size):
+            tmp = torch.randn([1, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
+            tensors.append(tmp)
+            seed += 1
+            seed_everything(seed)            
+        
+        start_code = torch.cat(tuple(tensors))
 
     images = []
 

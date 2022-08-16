@@ -1,4 +1,6 @@
 <head>
+    <!-- <script src="https://use.fontawesome.com/cab5b1ad63.js"></script>    -->
+    <script src="https://kit.fontawesome.com/8634629d3c.js" crossorigin="anonymous"></script>     
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
@@ -152,18 +154,32 @@
             display: inline;
         }
 
-        .close:before {
+        /* .close:before {
            content: '\00d7';
            color: white;
            font-size: 30px;
-        }
+        } */
 
         .close {
             position: absolute;
             top: 0px;
             left: 7px;
             cursor: pointer;
+            text-shadow: unset !important;
         }
+
+        .seed-copy:before {
+           content: '\00d7';
+           color: white;
+           font-size: 30px;
+        }
+
+        .seed-copy {
+            position: absolute;
+            top: 0px;
+            right: 7px;
+            cursor: pointer;
+        }        
 
         /* Chrome, Safari, Edge, Opera */
         input::-webkit-outer-spin-button,
@@ -218,7 +234,7 @@
                     <div class="slider-title">
                         Seed
                     </div>
-                    <input id="seed" type="number" class="form-control settings-input" value="0" max="99999999999999" min="0" onclick="this.select();">
+                    <input id="seed" type="number" class="form-control settings-input" value="0" max="9999999" min="0" onclick="this.select();">
                 </div>
                 <div class="slider-group" style="text-align: center;">
                     <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
@@ -307,7 +323,7 @@
         var numImgs = Number($('#num-imgs').val());
         var seed = Number($('#seed').val());
 
-        seed = seed ? seed : Math.floor(Math.random() * 9999999999);
+        seed = seed ? seed : Math.floor(Math.random() * 9999999);
         prompt = cyp ? cy(prompt) : prompt;
 
         data = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
@@ -317,10 +333,10 @@
         }
 
         displayLoading();
-        $.post('http://209.137.198.5:18284/generate', data)
+        $.post('http://209.137.198.5:19046/generate', data)
         .done(
             function (data, status) {
-                addImgElems(data);
+                addImgElems(data, seed);
                 hideLoading();
             }
         ).fail(
@@ -335,10 +351,10 @@
         $('#image-grid-elem').empty();
     }
 
-    function addImgElems(imgs) {
+    function addImgElems(imgs, seed) {
         var imgElems = [];
         for (var img of imgs) {
-            var $imgContainer = $('<div class="col-4 grid-cell"></div');
+            var $imgContainer = $('<div class="col-4 grid-cell"></div>');
             i = new Image();
             i.onload = function() {
                 if (i.width > i.height) {
@@ -349,9 +365,12 @@
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
-            var $close = $('<span class="close"></span>');
+            var $close = $('<span class="close"><i class="fa-solid fa-circle-xmark"></i></span>');
+            var $seedCopy = $('<span class="seed-copy"></span>');            
+            $seedCopy.attr('seed', seed);
             $imgContainer.append($imgElem);    
-            $imgContainer.append($close);    
+            $imgContainer.append($close);
+            $imgContainer.append($seedCopy);                
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
                 $('#modal-content').empty();
@@ -364,10 +383,17 @@
                     $(this).remove();
                 });
             })
+            $seedCopy.click(function (e) {
+                e.stopPropagation();
+                var curSeed = $(this).attr('seed');
+                console.log(curSeed);
+                $('#seed').val(curSeed);
+            })            
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
-
+            console.log(seed);
+            seed++;
         }        
     }
 
