@@ -12,16 +12,23 @@ from torch import autocast
 from contextlib import contextmanager, nullcontext
 from ldm.models.diffusion.ddim import DDIMSampler
 from ldm.models.diffusion.plms import PLMSSampler
+from collections import namedtuple
+from omegaconf import OmegaConf
 
-# def chunk(it, size):
-#     it = iter(it)
-#     return iter(lambda: tuple(islice(it, size)), ())
-
-def main(input_opt):
+def main(input_opt, model, device):
     parser = argparse.ArgumentParser()
 
-    #defaults
+    print('entering main')
+    print(input_opt)
+    input_opt['batch_size'] = int(input_opt['batch_size'])
+    input_opt['W'] = int(input_opt['W'])
+    input_opt['H'] = int(input_opt['H'])
+    input_opt['seed'] = int(input_opt['seed'])
+
+    print('defining defaults')
     opt = {
+        'prompt': 'Hej hej',
+        'seed': 43,
         'ddim_steps': 50,
         'fixed_code': True,
         'ddim_eta': 0.0,
@@ -33,15 +40,16 @@ def main(input_opt):
         'precision': 'autocast',
     }
 
+    print('updating dict')
+
     opt.update(input_opt)
+    opt = namedtuple("ObjectName", opt.keys())(*opt.values())
+
+    print(opt)
+
     seed_everything(opt.seed)
-
-    if opt.plms:
-        sampler = PLMSSampler(model)
-    else:
-        sampler = DDIMSampler(model)
-
-    data = [opt.batch_size * [prompt]]
+    sampler = PLMSSampler(model)
+    data = [opt.batch_size * [opt.prompt]]
 
     start_code = None
     if opt.fixed_code:
@@ -53,13 +61,12 @@ def main(input_opt):
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
-                for n in trange(opt.n_iter, desc="Sampling"):
+                for n in trange(1, desc="Sampling"):
                     for prompts in tqdm(data, desc="data"):
                         uc = None
                         if opt.scale != 1.0:
                             uc = model.get_learned_conditioning(opt.batch_size * [""])
-                        # if isinstance(prompts, tuple):
-                        #     prompts = list(prompts)
+
                         c = model.get_learned_conditioning(prompts)
                         shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                         samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
@@ -82,3 +89,17 @@ def main(input_opt):
           f" \nEnjoy.")
     
     return images
+
+
+def init_model():
+    config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
+    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt")
+
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    model = model.to(device)
+    
+    return model, device
+
+
+# model, device = init_model()
+# main({}, model, device)

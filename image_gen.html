@@ -156,6 +156,10 @@
         button {
             background-color: #606060 !important;
         }
+
+        .modal-dialog {
+            max-width: 1000px !important;
+        }
     </style>
 </head>
 
@@ -270,10 +274,10 @@
         var seed = Number($('#seed').val());
         prompt = cyp ? cy(prompt) : prompt;
 
-        data = { prompt: prompt, n_iter: numImgs, cy: cyp, seed: seed };
+        data = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
 
         for (var sliderOpts of sliderOptionArr) {
-            data[sliderOpts.name] = $('#' + sliderOpts.id).val().toLowerCase();
+            data[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
         }
 
         displayLoading();

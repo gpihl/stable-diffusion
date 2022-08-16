@@ -20,7 +20,7 @@ def init_model():
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
     
-    return model
+    return model, device
 
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
@@ -96,15 +96,15 @@ class S(BaseHTTPRequestHandler):
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = parse_qs(post_data.decode(), strict_parsing=True)
-            for x, y in thisdict.items():
+            for x, y in data.items():
                 data[x] = y[0]
 
             cyph = data['cy'] == 'true'
             if cyph:
-                data['prompt'] = decypher(prompt)
+                data['prompt'] = decypher(data['prompt'])
 
             print('running txt2img with prompt')
-            images = txt2img.main(data)
+            images = txt2img.main(data, server.model, server.device)
 
             resp = []
             for img in images:
@@ -126,8 +126,7 @@ def run(server_class=HTTPServer, handler_class=S, port=8080):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     httpd.lock = True
-    model = init_model()
-    httpd.model = model
+    httpd.model, httpd.device = init_model()
     httpd.lock = False
     try:
         httpd.serve_forever()
