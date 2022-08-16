@@ -29,7 +29,7 @@
         }
 
         .zoom-img {
-            margin: auto;
+            /* margin: auto; */
         }
 
         .grid-cell:after {
@@ -71,6 +71,8 @@
         .input-bar {
             border-radius: 7px;
             padding: 19px;
+            padding-left: 24px;
+            padding-right: 24px;
             background-color: #292525;
             margin-bottom: 12px;
             margin-right: 311px;            
@@ -87,15 +89,15 @@
             margin-left: 11px;
             float: right; 
             background-color: #292525;
-            padding-left: 10px;
-            padding-right: 10px;
-            padding-bottom: 30px;
+            padding: 15px;
         }
     
         .image-grid {
             border-radius: 7px;
             padding: 10px;
+            padding-top: 13px;
             background-color: #292525;
+            min-height: 352px;
         }    
     
         .slider {
@@ -116,7 +118,7 @@
         }
     
         .slider::-webkit-slider-thumb {
-            border-radius: 10px;
+            border-radius: 7px;
             -webkit-appearance: none;
             appearance: none;
             width: 25px;
@@ -154,31 +156,30 @@
             display: inline;
         }
 
-        /* .close:before {
-           content: '\00d7';
-           color: white;
-           font-size: 30px;
-        } */
-
-        .close {
+        .close-cross {
             position: absolute;
-            top: 0px;
-            left: 7px;
+            top: 6px;
+            left: 9px;
             cursor: pointer;
-            text-shadow: unset !important;
+            opacity: 0.2;
+            font-size: 20px;
         }
 
-        .seed-copy:before {
-           content: '\00d7';
-           color: white;
-           font-size: 30px;
+        .close-cross:hover {
+            opacity: 1.0;
         }
 
         .seed-copy {
             position: absolute;
-            top: 0px;
-            right: 7px;
+            top: 6px;
+            right: 30px;
             cursor: pointer;
+            opacity: 0.2;
+            font-size: 20px;            
+        }     
+        
+        .seed-copy:hover {
+            opacity: 1.0;
         }        
 
         /* Chrome, Safari, Edge, Opera */
@@ -206,10 +207,20 @@
         }
 
         .modal-content {
-            max-width: fit-content;
-            margin: auto;
+            /* max-width: fit-content;
+            margin: auto;             */
             /* background: transparent; */
         }
+
+        .x-mark-bg {
+            position: absolute;
+            color: black;            
+        }
+
+        .x-mark-fg {
+            position: absolute;
+            color: white;
+        }        
     </style>
 </head>
 
@@ -221,7 +232,7 @@
 </div>
 
 <body style="background-color: #303030; height: 100%;">
-    <div style="padding-left: 30px; padding-right: 30px; padding-top: 10px; background-color: #373737; margin-left: 40px; margin-right: 40px; height: 100%;">
+    <div style="padding-left: 30px; padding-right: 30px; padding-top: 28px; background-color: #373737; margin-left: 40px; margin-right: 40px; height: 100%;">
         <div>
             <div id="control-panel-elem" class="control-panel bordered">
                 <div class="slider-group">
@@ -262,16 +273,28 @@
     var sliderOptionArr = [
         { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64 },
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64 },
+        { name: 'Sample steps', id: 'steps-slider', minVal: 1, maxVal: 100, defaultVal: 50, sdName: 'ddim_steps', quantizeVal: 1 },
+        // { name: 'Stochasticity', id: 'eta-slider', minVal: 0, maxVal: 100, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 1 },
     ];
 
     initSliders(sliderOptionArr);
+    $(function(){
+        $('html').keydown(function(e){
+            if ($('#img-modal').hasClass('show') && (e.keyCode == 37 || e.keyCode == 39)) {
+                $zoomImg = $('.zoom-img');
+                var totalImgs = $('#image-grid-elem').children().length;
+                var idx = Number($zoomImg.attr('idx'));
+                idx = e.keyCode == 37 ? idx - 1 : (idx + 1) % totalImgs;
+                idx = idx < 0 ? totalImgs - 1 : idx;
+                $newZoomImg = $('#image-grid-elem').children().eq(idx).children('img').first().clone();
+                $newZoomImg.removeClass().addClass('zoom-img');                
+                $zoomImg.parent().append($newZoomImg);
+                $zoomImg.remove();
+            }
+        });
+    });
 
     cyp = true;
-
-    $('#prompt-input').keyup(function(e) {
-        if (e.keyCode == 13)
-            generate();
-    });
 
     $('input').keyup(function(e) {
         var min = $(this).attr('min');
@@ -301,6 +324,12 @@
         }        
     });
 
+    function indexImgs() {
+        $('#image-grid-elem').children().each(function (i) {
+            $(this).children('img').first().attr('idx', i);
+        });          
+    }
+
     function cy(prompt) {
         var res = '';
         for (c of prompt) {
@@ -315,6 +344,22 @@
         return res;
     }
 
+    function decy(prompt) {
+        var res = '';
+        for (c of prompt) {
+            if (c == ' ') {
+                res += ' ';
+                continue;
+            }
+            var asciiVal = c.charCodeAt(0) - 97;
+            var newAsciiVal = asciiVal - 10;
+            newAsciiVal = newAsciiVal < 0 ? newAsciiVal + 26 : newAsciiVal;
+            new_c = String.fromCharCode(newAsciiVal + 97);
+            res += new_c;
+        }
+        return res;
+    }    
+
     function generate() {
         var prompt = $('#prompt-input').val();
         if (prompt == '')
@@ -326,21 +371,21 @@
         seed = seed ? seed : Math.floor(Math.random() * 9999999);
         prompt = cyp ? cy(prompt) : prompt;
 
-        data = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
+        params = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
 
         for (var sliderOpts of sliderOptionArr) {
-            data[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
+            params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
         }
 
         displayLoading();
-        $.post('http://209.137.198.5:19046/generate', data)
+        $.post('http://209.137.198.5:16516/generate', params)
         .done(
-            function (data, status) {
-                addImgElems(data, seed);
+            function (resp, status) {
+                addImgElems(resp, params);
                 hideLoading();
             }
         ).fail(
-            function (data, status) {
+            function (resp, status) {
                 hideLoading();
                 alert('Something went wrong!')
             }
@@ -351,7 +396,7 @@
         $('#image-grid-elem').empty();
     }
 
-    function addImgElems(imgs, seed) {
+    function addImgElems(imgs, params) {
         var imgElems = [];
         for (var img of imgs) {
             var $imgContainer = $('<div class="col-4 grid-cell"></div>');
@@ -365,36 +410,49 @@
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
-            var $close = $('<span class="close"><i class="fa-solid fa-circle-xmark"></i></span>');
-            var $seedCopy = $('<span class="seed-copy"></span>');            
-            $seedCopy.attr('seed', seed);
+            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" title="Delete image"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
+            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" title="Reuse image parameters"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
+            $close.tooltip();
+            $seedCopy.tooltip();
+            $seedCopy.attr('seed', params.seed);
+            $seedCopy.data('params', params);
             $imgContainer.append($imgElem);    
             $imgContainer.append($close);
             $imgContainer.append($seedCopy);                
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
                 $('#modal-content').empty();
-                $('#modal-content').append($image.clone().removeClass().addClass('zoom-img'));
+                $zoomImg = $image.clone().removeClass().addClass('zoom-img');
+                $('#modal-content').append($zoomImg);
                 $('#img-modal').modal('show');
             });
             $close.click(function (e) {
                 e.stopPropagation();
+                $(this).tooltip('hide')                                                   
                 $(this).parent().fadeOut(200, function() {
                     $(this).remove();
+                    indexImgs();
                 });
             })
             $seedCopy.click(function (e) {
                 e.stopPropagation();
-                var curSeed = $(this).attr('seed');
-                console.log(curSeed);
-                $('#seed').val(curSeed);
+                var params = $(this).data('params');
+                var seed = $(this).attr('seed');   
+                console.log(seed);
+                $('#seed').val(seed);
+                $('#prompt-input').val(decy(params.prompt));
+                $('#width-slider').val(params.W).trigger('input');
+                $('#height-slider').val(params.H).trigger('input');
+                $('#steps-slider').val(params.ddim_steps).trigger('input');
+                $('#num-imgs').val(1);
             })            
+
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
-            console.log(seed);
-            seed++;
-        }        
+            params.seed++;
+        }
+        indexImgs();
     }
 
     function initSliders(sliderOptionArr) {

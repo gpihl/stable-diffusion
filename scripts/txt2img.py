@@ -22,6 +22,8 @@ def main(input_opt, model, device):
     input_opt['W'] = int(input_opt['W'])
     input_opt['H'] = int(input_opt['H'])
     input_opt['seed'] = int(input_opt['seed'])
+    input_opt['ddim_steps'] = int(input_opt['ddim_steps'])    
+    # input_opt['ddim_eta'] = float(input_opt['ddim_eta']) / 100
 
     print('defining defaults')
     opt = {
