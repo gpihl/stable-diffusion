@@ -116,7 +116,11 @@ def slerp(val, low, high):
     res = (torch.sin((1.0-val)*omega)/so)*low + (torch.sin(val*omega)/so) * high
     return res
 
-def get_slerp_vectors(start, end, device, frames=60):
+def get_slerp_vectors(start, end, device, frames_per_degree=1):
+    start_norm = start/torch.norm(start)
+    end_norm = end/torch.norm(end)
+    omega = torch.acos((start_norm*end_norm).sum())    
+    frames = round(omega.item() * frames_per_degree * 57.2957795)
     out = torch.Tensor(frames, start.shape[0]).to(device)
     factor = 1.0 / (frames - 1)
     for i in range(frames):
@@ -137,13 +141,16 @@ def interpolate_prompts(input_opts, model, device):
     print('Starting interpolate_prompts...')
     opts = list(map(parse_options, input_opts))
 
-    frames = 90
-    fps = 20
+    degrees_per_second = 20
+    fps = 40
+
+    frames_per_degree = fps / degrees_per_second
+
     previous_c = None
     previous_start_code = None
     slerp_c_vectors = []
     slerp_start_codes = []
-    frames = frames + 2 # pad for beginning and end frame
+    # frames = frames + 2 # pad for beginning and end frame
     loop = True
 
     for i, data in enumerate(map(lambda x: get_starting_code_and_conditioning_vector(x, model, device), opts)):
@@ -154,22 +161,23 @@ def interpolate_prompts(input_opts, model, device):
         else:
             original_c_shape = c.shape
             original_start_code_shape = start_code.shape
-            c_vectors = get_slerp_vectors(previous_c.flatten(), c.flatten(), device=device, frames=frames)
+            c_vectors = get_slerp_vectors(previous_c.flatten(), c.flatten(), device=device, frames_per_degree=frames_per_degree)
             c_vectors = c_vectors.reshape(-1, *original_c_shape)
             slerp_c_vectors.extend(list(c_vectors[1:])) # drop first frame to prevent repeating frames
-            start_codes = get_slerp_vectors(previous_start_code.flatten(), start_code.flatten(), device=device, frames=frames)
+            start_codes = get_slerp_vectors(previous_start_code.flatten(), start_code.flatten(), device=device, frames_per_degree=frames_per_degree)
             start_codes = start_codes.reshape(-1, *original_start_code_shape)
             slerp_start_codes.extend(list(start_codes[1:])) # drop first frame to prevent repeating frames
             if loop and i == len(opts) - 1:
-                c_vectors = get_slerp_vectors(c.flatten(), slerp_c_vectors[0].flatten(), device=device, frames=frames)
+                c_vectors = get_slerp_vectors(c.flatten(), slerp_c_vectors[0].flatten(), device=device, frames_per_degree=frames_per_degree)
                 c_vectors = c_vectors.reshape(-1, *original_c_shape)
                 slerp_c_vectors.extend(list(c_vectors[1:-1])) # drop first frame to prevent repeating frames
-                start_codes = get_slerp_vectors(start_code.flatten(), slerp_start_codes[0].flatten(), device=device, frames=frames)
+                start_codes = get_slerp_vectors(start_code.flatten(), slerp_start_codes[0].flatten(), device=device, frames_per_degree=frames_per_degree)
                 start_codes = start_codes.reshape(-1, *original_start_code_shape)
                 slerp_start_codes.extend(list(start_codes[1:-1])) # drop first and last frame to prevent repeating frames
         previous_c = c
         previous_start_code = start_code
 
+    print('starting generation')
     opt = opts[0]
     sampler = PLMSSampler(model)
     # sampler = DDIMSampler(model)    
