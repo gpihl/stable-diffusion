@@ -14,6 +14,14 @@ from omegaconf import OmegaConf
 import torch
 from ldm.util import instantiate_from_config
 
+class Payload(object):
+    def __init__(self, j):
+        self.__dict__ = json.loads(j)
+
+class ObjectFromDict(dict):
+    def __init__(self, j):
+        self.__dict__ = j        
+
 def init_model():
     config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
     model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt")
@@ -41,13 +49,6 @@ def load_model_from_config(config, ckpt, verbose=False):
     model.cuda()
     model.eval()
     return model
-
-# def cypher(prompt):
-#     res = ''
-#     for c in prompt:
-#         new_c = chr((ord(c) - 97 + 10) % 26 + 97)
-#         res += new_c
-#     return res
 
 def decypher(prompt):
     res = ''
@@ -84,45 +85,56 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != '/generate':
-                return
-            
-            server = self.server
+            if self.path != '/generate' and self.path != '/interpolate':
+                return                
 
-            if server.lock:
-                while server.lock:
-                    sleep(3)                                
+            if self.server.lock:
+                while self.server.lock:
+                    sleep(3)
 
-            server.lock = True
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = parse_qs(post_data.decode(), strict_parsing=True)
-            for x, y in data.items():
-                data[x] = y[0]
+            self.server.lock = True
+            imp.reload(scripts.txt2img)                
 
-            cyph = data['cy'] == 'true'
-            if cyph:
-                data['prompt'] = decypher(data['prompt'])
+            if self.path == '/interpolate':
+                self.interpolation_video()
+            else:
+                self.generate_picture()
 
-            print('running txt2img with prompt')
-            imp.reload(scripts.txt2img)
-            images = scripts.txt2img.main(data, server.model, server.device)
-
-            resp = []
-            for img in images:
-                buffered = BytesIO()
-                img.save(buffered, 'png')
-                img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-                resp.append(img_str)
-
-            self._set_post_response()
-            resp = json.dumps(resp)
-            self.wfile.write(resp.encode('utf-8'))
-            server.lock = False
+            self.server.lock = False
    
         except Exception as e:
             print(e)
-            server.lock = False
+            self.server.lock = False
+
+    def generate_picture(self):
+        resp = []
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        data = Payload(post_data)    
+        if data.cy:
+            data.prompt = decypher(data.prompt)
+
+        images = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
+
+        for img in images:
+            buffered = BytesIO()
+            img.save(buffered, 'png')
+            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            resp.append(img_str)
+
+        self._set_post_response()
+        resp = json.dumps(resp)
+        self.wfile.write(resp.encode('utf-8'))   
+
+    def interpolation_video(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        data = Payload(post_data)
+        input_opts = data.params
+        for i in range(len(input_opts)):
+            input_opts[i] = ObjectFromDict(input_opts[i])
+
+        scripts.txt2img.interpolate_prompts(input_opts, self.server.model, self.server.device)
 
 def run(server_class=HTTPServer, handler_class=S, port=8080):
     server_address = ('', port)

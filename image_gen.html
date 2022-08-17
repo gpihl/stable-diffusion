@@ -97,7 +97,7 @@
             padding: 10px;
             padding-top: 13px;
             background-color: #292525;
-            min-height: 430px;
+            /* min-height: 430px; */
         }    
     
         .slider {
@@ -388,7 +388,7 @@
         }
 
         displayLoading();
-        $.post('http://209.137.198.5:16516/generate', params)
+        $.post('http://209.137.198.5:15594/generate', JSON.stringify(params))
         .done(
             function (resp, status) {
                 addImgElems(resp, params);
@@ -400,6 +400,19 @@
                 alert('Something went wrong!')
             }
         ); 
+    }
+
+    function interpolate() {
+        params = $('#image-grid-elem').children().find('.seed-copy').toArray().map(x => { 
+            var tmp = $(x).data('params');
+            var p = {...tmp};
+            var s = $(x).attr('seed');
+            p.prompt = decy(p.prompt);
+            p.seed = s;
+            return p;
+        });
+        data = JSON.stringify({ params: params });
+        $.post('http://209.137.198.5:15594/interpolate', data);
     }
 
     function clearImgElems() {
