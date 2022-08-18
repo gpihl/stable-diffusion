@@ -22,7 +22,6 @@ class ObjectFromDict(dict):
         self.__dict__ = j
 
 def unflatten(l, n):
-    print(len(l))
     res = []
     t = l[:]
     while len(t) > 0:
@@ -238,10 +237,7 @@ def interpolate_prompts(input_opts, model, device):
                         c = torch.stack(list(c), dim=0)
 
                     c = torch.cat(tuple(c))
-
                     start_code = torch.cat(tuple(start_code))
-                    # if isinstance(start_code, tuple) or isinstance(start_code, list):
-                    #     start_code = torch.stack(list(start_code), dim=0)
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,

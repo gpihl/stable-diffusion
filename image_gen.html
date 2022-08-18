@@ -281,16 +281,30 @@
 
     $(function(){
         $('html').keydown(function(e){
-            if ($('#img-modal').hasClass('show') && (e.keyCode == 37 || e.keyCode == 39)) {
-                $zoomImg = $('.zoom-img');
-                var totalImgs = $('#image-grid-elem').children().length;
-                var idx = Number($zoomImg.attr('idx'));
-                idx = e.keyCode == 37 ? idx - 1 : (idx + 1) % totalImgs;
-                idx = idx < 0 ? totalImgs - 1 : idx;
-                $newZoomImg = $('#image-grid-elem').children().eq(idx).children('img').first().clone();
-                $newZoomImg.removeClass().addClass('zoom-img');                
-                $zoomImg.parent().append($newZoomImg);
-                $zoomImg.remove();
+            if ($('#img-modal').hasClass('show')) {
+                if (e.keyCode == 37 || e.keyCode == 39 || e.keyCode == 88) {
+                    $zoomImg = $('.zoom-img');
+                    var idx = Number($zoomImg.attr('idx'));
+                    var totalImgs = $('#image-grid-elem').children().length;                                            
+
+                    if (e.keyCode == 37 || e.keyCode == 39) {
+                        idx = e.keyCode == 37 ? idx - 1 : (idx + 1) % totalImgs;
+                        idx = idx < 0 ? totalImgs - 1 : idx;
+                    } else if (e.keyCode == 88) {
+                        $('#image-grid-elem').children().eq(idx).remove();
+                        indexImgs();
+                        idx %= (totalImgs - 1)
+                        if (totalImgs - 1 == 0) {
+                            $('#img-modal').modal('hide');
+                            return;
+                        }
+                    }                    
+
+                    $newZoomImg = $('#image-grid-elem').children().eq(idx).children('img').first().clone();
+                    $newZoomImg.removeClass().addClass('zoom-img');                
+                    $zoomImg.parent().append($newZoomImg);
+                    $zoomImg.remove();
+                }
             }
         });
     });
