@@ -24,8 +24,8 @@ class ObjectFromDict(dict):
         self.__dict__ = j        
 
 def init_model():
-    config = OmegaConf.load("configs/latent-diffusion/txt2img-1p4B-eval.yaml")
-    model = load_model_from_config(config, "models/ldm/text2img-large/model.ckpt")
+    config = OmegaConf.load("configs/stable-diffusion/v1-inference.yaml")
+    model = load_model_from_config(config, "models/ldm/stable-diffusion-v1/model.ckpt")
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     model = model.to(device)
