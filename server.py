@@ -13,6 +13,7 @@ import imp
 from omegaconf import OmegaConf
 import torch
 from ldm.util import instantiate_from_config
+import traceback
 
 class Payload(object):
     def __init__(self, j):
@@ -102,8 +103,8 @@ class S(BaseHTTPRequestHandler):
 
             self.server.lock = False
    
-        except Exception as e:
-            print(e)
+        except Exception:
+            print(traceback.format_exc())
             self.server.lock = False
 
     def generate_picture(self):

@@ -388,7 +388,7 @@
         }
 
         displayLoading();
-        $.post('http://209.137.198.5:13762/generate', JSON.stringify(params))
+        $.post(window.location.href + 'generate', JSON.stringify(params))
         .done(
             function (resp, status) {
                 addImgElems(resp, params);
@@ -412,7 +412,7 @@
             return p;
         }).reverse();
         data = JSON.stringify({ params: params });
-        $.post('http://209.137.198.5:13762/interpolate', data);
+        $.post(window.location.href + 'interpolate', data);
     }
 
     function clearImgElems() {

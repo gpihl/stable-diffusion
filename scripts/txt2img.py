@@ -22,10 +22,12 @@ class ObjectFromDict(dict):
         self.__dict__ = j
 
 def unflatten(l, n):
+    print(len(l))
     res = []
-    while len(l) > 0:
-        res.append(l[:n])
-        l = l[n:]  
+    t = l[:]
+    while len(t) > 0:
+        res.append(t[:n])
+        t = t[n:]  
     return res
 
 def parse_options(input_opt):
@@ -123,17 +125,26 @@ def slerp(val, low, high):
     res = (torch.sin((1.0-val)*omega)/so)*low + (torch.sin(val*omega)/so) * high
     return res
 
-def get_slerp_vectors(start, end, device, frames_per_degree=1):
-    start_norm = start/torch.norm(start)
-    end_norm = end/torch.norm(end)
-    omega = torch.acos((start_norm*end_norm).sum())    
-    frames = round(omega.item() * frames_per_degree * 57.2957795)
+def get_slerp_vectors(start, end, device, frames):
     out = torch.Tensor(frames, start.shape[0]).to(device)
     factor = 1.0 / (frames - 1)
     for i in range(frames):
         out[i] = slerp(factor*i, start, end)
 
     return out
+
+def get_num_frames(a, b, u, v, frames_per_degree):
+    ab_angle = get_angle(a, b)
+    uv_angle = get_angle(u, v)
+    ab_frames = ab_angle * frames_per_degree * 57.2957795
+    uv_frames = uv_angle * frames_per_degree * 57.2957795
+    return round((ab_frames + uv_frames) / 2)
+
+def get_angle(start, end):
+    start_norm = start/torch.norm(start)
+    end_norm = end/torch.norm(end)
+    omega = torch.acos((start_norm*end_norm).sum())
+    return omega.item()
 
 def get_starting_code_and_conditioning_vector(opt, model, device):
     seed = opt.seed
@@ -166,21 +177,43 @@ def interpolate_prompts(input_opts, model, device):
             slerp_c_vectors.append(c)
             slerp_start_codes.append(start_code)
         else:
+            prev_c_flat = previous_c.flatten()
+            c_flat = c.flatten()
+
+            prev_s_flat = previous_start_code.flatten()
+            s_flat = start_code.flatten()
+
+            num_frames = get_num_frames(prev_c_flat, c_flat, prev_s_flat, s_flat, frames_per_degree)
+
             original_c_shape = c.shape
             original_start_code_shape = start_code.shape
-            c_vectors = get_slerp_vectors(previous_c.flatten(), c.flatten(), device=device, frames_per_degree=frames_per_degree)
+
+            c_vectors = get_slerp_vectors(prev_c_flat, c_flat, device=device, frames=num_frames)
             c_vectors = c_vectors.reshape(-1, *original_c_shape)
-            slerp_c_vectors.extend(list(c_vectors[1:])) # drop first frame to prevent repeating frames
-            start_codes = get_slerp_vectors(previous_start_code.flatten(), start_code.flatten(), device=device, frames_per_degree=frames_per_degree)
+
+            start_codes = get_slerp_vectors(prev_s_flat, s_flat, device=device, frames=num_frames)
             start_codes = start_codes.reshape(-1, *original_start_code_shape)
-            slerp_start_codes.extend(list(start_codes[1:])) # drop first frame to prevent repeating frames
+            
+            slerp_c_vectors.extend(list(c_vectors[1:]))
+            slerp_start_codes.extend(list(start_codes[1:]))
+
             if loop and i == len(opts) - 1:
-                c_vectors = get_slerp_vectors(c.flatten(), slerp_c_vectors[0].flatten(), device=device, frames_per_degree=frames_per_degree)
+                c_flat = c.flatten()
+                c_0_flat = slerp_c_vectors[0].flatten()
+
+                s_flat = start_code.flatten()
+                s_0_flat = slerp_start_codes[0].flatten()
+
+                num_frames = get_num_frames(c_flat, c_0_flat, s_flat, s_0_flat, frames_per_degree)
+
+                c_vectors = get_slerp_vectors(c_flat, c_0_flat, device=device, frames=num_frames)
                 c_vectors = c_vectors.reshape(-1, *original_c_shape)
-                slerp_c_vectors.extend(list(c_vectors[1:-1])) # drop first frame to prevent repeating frames
-                start_codes = get_slerp_vectors(start_code.flatten(), slerp_start_codes[0].flatten(), device=device, frames_per_degree=frames_per_degree)
+
+                start_codes = get_slerp_vectors(s_flat, s_0_flat, device=device, frames=num_frames)
                 start_codes = start_codes.reshape(-1, *original_start_code_shape)
-                slerp_start_codes.extend(list(start_codes[1:-1])) # drop first and last frame to prevent repeating frames
+
+                slerp_c_vectors.extend(list(c_vectors[1:]))
+                slerp_start_codes.extend(list(start_codes[1:]))
         previous_c = c
         previous_start_code = start_code
 
@@ -190,6 +223,7 @@ def interpolate_prompts(input_opts, model, device):
     # sampler = DDIMSampler(model)    
     video_out = imageio.get_writer('test.mp4', mode='I', fps=fps, codec='libx264')
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    batch_size = 10
     slerp_c_vectors = unflatten(slerp_c_vectors, batch_size)
     slerp_start_codes = unflatten(slerp_start_codes, batch_size)
 
@@ -202,8 +236,12 @@ def interpolate_prompts(input_opts, model, device):
                         uc = model.get_learned_conditioning(len(c) * [""])
                     if isinstance(c, tuple) or isinstance(c, list):
                         c = torch.stack(list(c), dim=0)
+
+                    c = torch.cat(tuple(c))
+
+                    start_code = torch.cat(tuple(start_code))
                     # if isinstance(start_code, tuple) or isinstance(start_code, list):
-                    #     start_code = start_code[0]
+                    #     start_code = torch.stack(list(start_code), dim=0)
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
