@@ -21,6 +21,13 @@ class ObjectFromDict(dict):
     def __init__(self, j):
         self.__dict__ = j
 
+def unflatten(l, n):
+    res = []
+    while len(l) > 0:
+        res.append(l[:n])
+        l = l[n:]  
+    return res
+
 def parse_options(input_opt):
     input_opt.batch_size = int(input_opt.batch_size)
     input_opt.W = int(input_opt.W)
@@ -182,23 +189,26 @@ def interpolate_prompts(input_opts, model, device):
     sampler = PLMSSampler(model)
     # sampler = DDIMSampler(model)    
     video_out = imageio.get_writer('test.mp4', mode='I', fps=fps, codec='libx264')
-    precision_scope = autocast if opt.precision=="autocast" else nullcontext    
+    precision_scope = autocast if opt.precision=="autocast" else nullcontext
+    slerp_c_vectors = unflatten(slerp_c_vectors, batch_size)
+    slerp_start_codes = unflatten(slerp_start_codes, batch_size)
+
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
                 for c, start_code in tqdm(zip(slerp_c_vectors, slerp_start_codes), desc="data", total=len(slerp_c_vectors)):
                     uc = None
                     if opt.scale != 1.0:
-                        uc = model.get_learned_conditioning(1 * [""])
+                        uc = model.get_learned_conditioning(len(c) * [""])
                     if isinstance(c, tuple) or isinstance(c, list):
                         c = torch.stack(list(c), dim=0)
-                    if isinstance(start_code, tuple) or isinstance(start_code, list):
-                        start_code = start_code[0]
+                    # if isinstance(start_code, tuple) or isinstance(start_code, list):
+                    #     start_code = start_code[0]
 
                     shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
                     samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
                                                         conditioning=c,
-                                                        batch_size=1,
+                                                        batch_size=len(c),
                                                         shape=shape,
                                                         verbose=False,
                                                         unconditional_guidance_scale=opt.scale,
