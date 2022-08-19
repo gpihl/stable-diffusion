@@ -388,6 +388,8 @@
         var prompt = $('#prompt-input').val();
         if (prompt == '')
             prompt = ' ';
+
+        prompt = prompt.toLowerCase();
             
         var numImgs = Number($('#num-imgs').val());
         var seed = Number($('#seed').val());

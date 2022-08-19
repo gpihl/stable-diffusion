@@ -161,7 +161,7 @@ def interpolate_prompts(input_opts, model, device):
     print('Starting interpolate_prompts...')
     opts = list(map(parse_options, input_opts))
 
-    degrees_per_second = 10
+    degrees_per_second = 3
     fps = 30
 
     frames_per_degree = fps / degrees_per_second
