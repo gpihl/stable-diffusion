@@ -3,6 +3,7 @@ import numpy as np
 import time
 import torch
 import imageio
+import random
 import math
 from PIL import Image
 from tqdm import tqdm, trange
@@ -225,7 +226,7 @@ def interpolate_prompts(input_opts, model, device):
     opt = opts[0]
     sampler = PLMSSampler(model)
     # sampler = DDIMSampler(model)    
-    video_out = imageio.get_writer('test.mp4', mode='I', fps=fps, codec='libx264')
+    video_out = imageio.get_writer('test' + random.randint(0, 999999999) + '.mp4', mode='I', fps=fps, codec='libx264')
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     batch_size = 10
     slerp_c_vectors = unflatten(slerp_c_vectors, batch_size)
