@@ -3,6 +3,7 @@ import numpy as np
 import time
 import torch
 import imageio
+import math
 from PIL import Image
 from tqdm import tqdm, trange
 from itertools import islice
@@ -116,7 +117,7 @@ def txt2img(input_opt, model, device):
 def slerp(val, low, high):
     low_norm = low/torch.norm(low)
     high_norm = high/torch.norm(high)
-    omega = torch.acos((low_norm*high_norm).sum())
+    omega = torch.acos(torch.clamp((low_norm*high_norm).sum(), -1.0, 1.0))
     so = torch.sin(omega)
     if so.item() == 0:
         return low
@@ -142,8 +143,10 @@ def get_num_frames(a, b, u, v, frames_per_degree):
 def get_angle(start, end):
     start_norm = start/torch.norm(start)
     end_norm = end/torch.norm(end)
-    omega = torch.acos((start_norm*end_norm).sum())
-    return omega.item()
+    dot = (start_norm*end_norm).sum().item()
+    dot = min(max(dot,-1.0),1.0)
+    omega = math.acos(dot)
+    return omega
 
 def get_starting_code_and_conditioning_vector(opt, model, device):
     seed = opt.seed
@@ -158,10 +161,12 @@ def interpolate_prompts(input_opts, model, device):
     print('Starting interpolate_prompts...')
     opts = list(map(parse_options, input_opts))
 
-    degrees_per_second = 20
-    fps = 40
+    degrees_per_second = 10
+    fps = 30
 
     frames_per_degree = fps / degrees_per_second
+
+    print(frames_per_degree)
 
     previous_c = None
     previous_start_code = None
