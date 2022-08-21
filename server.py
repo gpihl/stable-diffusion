@@ -124,7 +124,7 @@ class S(BaseHTTPRequestHandler):
         if data.cy:
             data.prompt = decypher(data.prompt)
 
-        images, new_variances = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
+        images, new_variances = scripts.txt2img.txt2img2(data, self.server.model, self.server.device)
 
         for img in images:
             buffered = BytesIO()
@@ -146,7 +146,7 @@ class S(BaseHTTPRequestHandler):
         for i in range(len(input_opts)):
             input_opts[i] = ObjectFromDict(input_opts[i])
 
-        scripts.txt2img.interpolate_prompts(input_opts, self.server.model, self.server.device)
+        scripts.txt2img.interpolate_prompts2(input_opts, self.server.model, self.server.device)
 
 def run(server_class=HTTPServer, handler_class=S, port=8080):
     server_address = ('', port)

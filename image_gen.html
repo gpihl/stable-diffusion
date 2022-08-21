@@ -281,8 +281,8 @@
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64 },
         { name: 'Sample steps', id: 'steps-slider', minVal: 1, maxVal: 100, defaultVal: 50, sdName: 'ddim_steps', quantizeVal: 1 },
         { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
-        { name: 'Variation factor', id: 'variance-scale-slider', minVal: 0, maxVal: 0.1, defaultVal: 0.0, sdName: 'variance_scale', quantizeVal: 0.01 },        
-        { name: 'Unconditional guidance', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.1 },
+        { name: 'Variation factor', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.0, sdName: 'variance_scale', quantizeVal: 0.01 },        
+        { name: 'Conditional guidance', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.1 },
     ];
 
     var variance = null;
@@ -439,10 +439,15 @@
     function interpolate() {
         params = $('#image-grid-elem').children().find('.seed-copy').toArray().map(x => { 
             var tmp = $(x).data('params');
+            var varVec = $(x).data('variance');
             var p = {...tmp};
             var s = $(x).attr('seed');
             p.prompt = decy(p.prompt);
+            p.batch_size = 1;
+            p.variance_scale = 0;
+            p.variance_vector = varVec;
             p.seed = s;
+            p.seeds = [s];
             return p;
         }).reverse();
         data = JSON.stringify({ params: params });
