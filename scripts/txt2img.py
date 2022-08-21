@@ -94,8 +94,8 @@ def interpolate_prompts2(request_objs, model, device):
 
     images = []
     ddim_steps = grs[0].ddim_steps
-    ddim_eta = grs[0].ddim_eta
     scale = grs[0].scale
+    ddim_eta = GR.GR.ddim_eta    
     shape = GR.GR.start_code_shape[1:]
     batch_size = 15
     sampler = DDIMSampler(model)

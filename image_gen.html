@@ -9,6 +9,13 @@
         :root {
             --text-color: #777777;
         }
+
+        hr {
+            margin-top: 1rem;
+            margin-bottom: unset !important;
+            border: 0;
+            border-top: 1px solid rgb(62 62 62);
+        }        
         
         .grid-cell {
             text-align: center;
@@ -70,34 +77,46 @@
         }
 
         .input-bar {
-            border-radius: 7px;
+            z-index: 1000;
+            position: fixed;
+            width: 100%;
+            /* border-radius: 7px; */
             padding: 19px;
-            padding-left: 24px;
-            padding-right: 24px;
+            /* padding-left: 24px;
+            padding-right: 24px; */
             background-color: #292525;
-            margin-bottom: 12px;
-            margin-right: 311px;            
+            /* margin-bottom: 12px;
+            margin-right: 311px;             */
         }
 
         .bordered {
-            border: solid 2px #444444;
-            box-shadow: inset 0 1px 1px rgb(0 0 0 / 8%), 0 0 2px rgb(156 156 156 / 60%);
+            /* border: solid 2px #444444;
+            box-shadow: inset 0 1px 1px rgb(0 0 0 / 8%), 0 0 2px rgb(156 156 156 / 60%); */
         }
     
         .control-panel {
-            border-radius: 7px;
+            z-index: 1000;
+            position: fixed;
+            top: 88px;
+            right: 0px;    
+            height: 100%;        
+            /* border-radius: 7px; */
             width: 300px;
-            margin-left: 11px;
-            float: right; 
             background-color: #292525;
             padding: 15px;
         }
     
         .image-grid {
-            border-radius: 7px;
-            padding: 10px;
-            padding-top: 13px;
-            background-color: #292525;
+            /* border-radius: 7px; */
+            /* padding: 10px; */
+            /* padding-top: 13px; */
+            position: absolute;
+            /* background-color: #292525; */
+            width: -webkit-calc(100% - 302px);
+            width: -moz-calc(100% - 302px);
+            width: calc(100% - 302px);     
+            top: 89px;       
+            left: 16px;
             /* min-height: 430px; */
         }    
     
@@ -137,8 +156,8 @@
         }
 
         .slider-group {
-            padding: 4px;
-            margin-bottom: 5px;
+            padding: 7px;
+            /* margin-bottom: 5px; */
         }
 
         .slider-title {
@@ -233,46 +252,50 @@
 </div>
 
 <body style="background-color: #303030; height: 100%;">
-    <div style="padding-left: 30px; padding-right: 30px; padding-top: 28px; background-color: #373737; margin-left: 40px; margin-right: 40px; height: 100%;">
-        <div>
-            <div id="control-panel-elem" class="control-panel bordered">
-                <div class="slider-group">
-                    <div class="slider-title">
-                        Number of images
-                    </div>
-                    <input id="num-imgs" type="number" class="form-control settings-input" value="4" max="20" min="1" onclick="this.select();">
-                </div>
-                <div class="slider-group">
-                    <div class="slider-title">
-                        Seed (0 = random)
-                    </div>
-                    <input id="seed" type="number" class="form-control settings-input" value="0" max="9999999" min="0" onclick="this.select();">
-                </div>
-                <div class="slider-group" style="text-align: center;">
-                    <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
-                        Download images
-                    </button>         
-                </div>    
-                <div class="slider-group" style="text-align: center;">
-                    <button id="clear-variance-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="clearVariance();">
-                        Clear variation vector
-                    </button>         
-                </div>                                             
+    <div class="input-bar bordered">
+        <button id="generate-button" type="button" class="btn btn-secondary mr-3 mt-1" style="float: left; width: 120px; color: #c1bbbb;" onclick="generate();">
+            <div id="button-default-content">Generate</div>
+            <div id="button-loading-content" style="display: none;">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Loading...
             </div>
-            <div class="input-bar bordered">
-                <button id="generate-button" type="button" class="btn btn-secondary ml-3 mt-1" style="float: right; width: 120px; color: #c1bbbb;" onclick="generate();">
-                    <div id="button-default-content">Generate</div>
-                    <div id="button-loading-content" style="display: none;">
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        Loading...
-                    </div>
-                </button>                
-                <input id="prompt-input" class="form-control form-control-lg" type="text" placeholder="Enter prompt" style="width: -webkit-fill-available;">
-            </div>
-            <div id="image-grid-elem" class="image-grid row bordered">
-            </div>
-        </div>    
+        </button>                
+        <input id="prompt-input" class="form-control form-control-lg" type="text" placeholder="Enter prompt" style="width: -webkit-fill-available;">
     </div>
+    <div id="control-panel-elem" class="control-panel bordered">
+        <div class="slider-group">
+            <div class="slider-title">
+                Number of images
+            </div>
+            <input id="num-imgs" type="number" class="form-control settings-input" value="4" max="20" min="1" onclick="this.select();">
+        </div>
+        <div class="slider-group">
+            <div class="slider-title">
+                Seed (0 = random)
+            </div>
+            <input id="seed" type="number" class="form-control settings-input" value="0" max="9999999" min="0" onclick="this.select();">
+        </div>
+        <hr/>
+        <div id="variation-group">
+            <hr/>
+            <div class="slider-group" style="text-align: center;">
+                <button id="clear-variance-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="clearVariance();">
+                    Exit variation mode <i class="fa-solid fa-eye-dropper ml-2"></i></i>
+                </button>         
+            </div>
+        </div>
+        <hr/>
+        
+        <div class="slider-group" style="text-align: center;">
+            <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
+                Save images <i class="fa-solid fa-floppy-disk ml-2"></i>
+            </button>         
+        </div>            
+        
+    </div>    
+    <div id="image-grid-elem" class="image-grid row bordered">
+    </div>
+
 </body>
 
 <script>
@@ -280,12 +303,13 @@
         { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64 },
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64 },
         { name: 'Sample steps', id: 'steps-slider', minVal: 1, maxVal: 100, defaultVal: 50, sdName: 'ddim_steps', quantizeVal: 1 },
-        { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
-        { name: 'Variation factor', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.0, sdName: 'variance_scale', quantizeVal: 0.01 },        
-        { name: 'Conditional guidance', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.1 },
+        { name: 'Conditional guidance', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.1 },        
+        // { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
+        { name: 'Variation factor', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.0, sdName: 'variance_scale', quantizeVal: 0.01, target: 'variation-group' },        
     ];
 
     var variance = null;
+    loading = false;
 
     initSliders(sliderOptionArr);
 
@@ -319,8 +343,9 @@
         });
     });
 
-    $('#prompt-input').keyup(function(e) {
-        if (e.keyCode == 13)
+
+    $('body').keyup(function(e) {
+        if (e.keyCode == 13 && !loading)
             generate();
     });    
 
@@ -395,6 +420,9 @@
     }    
 
     function generate() {
+        if (loading)
+            return;
+
         var prompt = $('#prompt-input').val();
         if (prompt == '')
             prompt = ' ';
@@ -475,8 +503,8 @@
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
-            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" title="Delete image"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
-            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" title="Reuse image parameters"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
+            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
+            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
             $close.tooltip();
             $seedCopy.tooltip();
             $seedCopy.attr('seed', params.seeds[idx]);
@@ -510,10 +538,11 @@
                 $('#width-slider').val(params.W).trigger('input');
                 $('#height-slider').val(params.H).trigger('input');
                 $('#steps-slider').val(params.ddim_steps).trigger('input');
-                $('#eta-slider').val(params.ddim_eta).trigger('input');
-                $('#scale-slider').val(params.scale).trigger('input');                
-                $('#variance-scale-slider').val(params.variance_scale).trigger('input');
-                $('#num-imgs').val(1);
+                // $('#eta-slider').val(params.ddim_eta).trigger('input');
+                $('#scale-slider').val(params.scale).trigger('input'); 
+                $('#variance-scale-slider').val(0.2).trigger('input');
+                $('#variation-group').fadeIn(200);
+                // $('#num-imgs').val(1);
             })            
 
             $imgContainer.hide();
@@ -527,8 +556,15 @@
     function initSliders(sliderOptionArr) {
         for (var sliderOptions of sliderOptionArr) {
             var $sliderElem = createSlider(sliderOptions);
-            $sliderElem.insertBefore($('#control-panel-elem').children().last());
+            if (sliderOptions.target == null)
+                $sliderElem.insertBefore($('#control-panel-elem :nth-last-child(3)').last());
+            else                
+                $sliderElem.insertBefore($('#variation-group').children().last())
         }
+
+        $('#width-slider, #height-slider').on('input', function () {
+            clearVariance();
+        })
     }
 
     function createSlider(options) {
@@ -570,16 +606,18 @@
 
     function displayLoading() {
         $('#generate-button').prop("disabled", true);
-        $('#prompt-input').prop("disabled", true);
+        // $('#prompt-input').prop("disabled", true);
         $('#button-default-content').hide();
         $('#button-loading-content').show();
+        loading = true;
     }
 
     function hideLoading() {
         $('#generate-button').prop("disabled", false);
-        $('#prompt-input').prop("disabled", false);
+        // $('#prompt-input').prop("disabled", false);
         $('#button-loading-content').hide();
         $('#button-default-content').show();
+        loading = false
     }
 
     function downloadAllImgs() {
@@ -590,6 +628,8 @@
     }
 
     function clearVariance() {
+        $('#variation-group').fadeOut(200);
+        $('#variance-scale-slider').val(0);
         variance = null;
     }
 
