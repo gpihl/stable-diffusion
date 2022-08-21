@@ -21,7 +21,16 @@ class Payload(object):
 
 class ObjectFromDict(dict):
     def __init__(self, j):
-        self.__dict__ = j        
+        self.__dict__ = j    
+
+class GenerationResponse():
+    def __init__(self):
+        self.imgs = []
+        self.new_variances = []
+
+    def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)        
 
 def init_model():
     config = OmegaConf.load("configs/stable-diffusion/v1-inference.yaml")
@@ -108,23 +117,25 @@ class S(BaseHTTPRequestHandler):
             self.server.lock = False
 
     def generate_picture(self):
-        resp = []
+        resp = GenerationResponse()
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         data = Payload(post_data)    
         if data.cy:
             data.prompt = decypher(data.prompt)
 
-        images = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
+        images, new_variances = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
 
         for img in images:
             buffered = BytesIO()
             img.save(buffered, 'png')
             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            resp.append(img_str)
+            resp.imgs.append(img_str)
+
+        resp.new_variances = new_variances
 
         self._set_post_response()
-        resp = json.dumps(resp)
+        resp = resp.toJSON()
         self.wfile.write(resp.encode('utf-8'))   
 
     def interpolation_video(self):

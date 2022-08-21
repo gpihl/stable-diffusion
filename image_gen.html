@@ -64,6 +64,7 @@
         }
 
         .settings-input {
+            height: 25px;
             text-align: right;
             margin-top: 6px;
         }
@@ -103,9 +104,9 @@
         .slider {
             -webkit-appearance: none;
             width: 100%;
-            height: 25px;
+            height: 15px;
             background: #777777;
-            border-radius: 7px;
+            border-radius: 4px;
             outline: none;
             opacity: 0.7;
             -webkit-transition: .2s;
@@ -136,7 +137,7 @@
         }
 
         .slider-group {
-            padding: 10px;
+            padding: 4px;
             margin-bottom: 5px;
         }
 
@@ -243,7 +244,7 @@
                 </div>
                 <div class="slider-group">
                     <div class="slider-title">
-                        Seed
+                        Seed (0 = random)
                     </div>
                     <input id="seed" type="number" class="form-control settings-input" value="0" max="9999999" min="0" onclick="this.select();">
                 </div>
@@ -251,7 +252,12 @@
                     <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
                         Download images
                     </button>         
-                </div>                            
+                </div>    
+                <div class="slider-group" style="text-align: center;">
+                    <button id="clear-variance-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="clearVariance();">
+                        Clear variation vector
+                    </button>         
+                </div>                                             
             </div>
             <div class="input-bar bordered">
                 <button id="generate-button" type="button" class="btn btn-secondary ml-3 mt-1" style="float: right; width: 120px; color: #c1bbbb;" onclick="generate();">
@@ -274,8 +280,12 @@
         { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64 },
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64 },
         { name: 'Sample steps', id: 'steps-slider', minVal: 1, maxVal: 100, defaultVal: 50, sdName: 'ddim_steps', quantizeVal: 1 },
-        // { name: 'Stochasticity', id: 'eta-slider', minVal: 0, maxVal: 100, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 1 },
+        { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
+        { name: 'Variation factor', id: 'variance-scale-slider', minVal: 0, maxVal: 0.1, defaultVal: 0.0, sdName: 'variance_scale', quantizeVal: 0.01 },        
+        { name: 'Unconditional guidance', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.1 },
     ];
+
+    var variance = null;
 
     initSliders(sliderOptionArr);
 
@@ -394,10 +404,18 @@
         var numImgs = Number($('#num-imgs').val());
         var seed = Number($('#seed').val());
 
-        seed = seed ? seed : Math.floor(Math.random() * 9999999);
+        seeds = []
+        if (seed == 0) {
+            for (i = 0; i < numImgs; i++) 
+                seeds.push(Math.floor(Math.random() * 9999999));
+        } else {
+            for (i = 0; i < numImgs; i++) 
+                seeds.push(seed);
+        }
+
         prompt = cyp ? cy(prompt) : prompt;
 
-        params = { prompt: prompt, batch_size: numImgs, cy: cyp, seed: seed };
+        params = { prompt: prompt, batch_size: numImgs, cy: cyp, seeds: seeds, variance_vector: variance };
 
         for (var sliderOpts of sliderOptionArr) {
             params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
@@ -413,7 +431,7 @@
         ).fail(
             function (resp, status) {
                 hideLoading();
-                alert('Something went wrong!')
+                alert('Something went wrong, probably not enough GPU memory. Try smaller resolution and/or fewer images!')
             }
         ); 
     }
@@ -435,8 +453,11 @@
         $('#image-grid-elem').empty();
     }
 
-    function addImgElems(imgs, params) {
+    function addImgElems(data, params) {
+        imgs = data.imgs;
+        variances = data.new_variances;
         var imgElems = [];
+        var idx = 0;
         for (var img of imgs) {
             var $imgContainer = $('<div class="col-4 grid-cell"></div>');
             i = new Image();
@@ -453,8 +474,9 @@
             var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" title="Reuse image parameters"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
             $close.tooltip();
             $seedCopy.tooltip();
-            $seedCopy.attr('seed', params.seed);
+            $seedCopy.attr('seed', params.seeds[idx]);
             $seedCopy.data('params', params);
+            $seedCopy.data('variance', variances[idx]);
             $imgContainer.append($imgElem);    
             $imgContainer.append($close);
             $imgContainer.append($seedCopy);                
@@ -476,20 +498,23 @@
             $seedCopy.click(function (e) {
                 e.stopPropagation();
                 var params = $(this).data('params');
-                var seed = $(this).attr('seed');   
-                console.log(seed);
+                var seed = $(this).attr('seed');
+                variance = $(this).data('variance');
                 $('#seed').val(seed);
                 $('#prompt-input').val(decy(params.prompt));
                 $('#width-slider').val(params.W).trigger('input');
                 $('#height-slider').val(params.H).trigger('input');
                 $('#steps-slider').val(params.ddim_steps).trigger('input');
+                $('#eta-slider').val(params.ddim_eta).trigger('input');
+                $('#scale-slider').val(params.scale).trigger('input');                
+                $('#variance-scale-slider').val(params.variance_scale).trigger('input');
                 $('#num-imgs').val(1);
             })            
 
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
-            params.seed++;
+            idx++;
         }
         indexImgs();
     }
@@ -516,7 +541,7 @@
         var groupElem = '<div class="slider-group"></div>';
         var labelElem = '<div class="slider-title">' + name + ':</div>';
         var valDisplayElem = '<div id="' + valDisplayId + '" class="slider-val">' + defaultVal + '</div>';
-        var sliderElem = '<input id="' + id + '" type="range" min="' + minVal + '" max="' + maxVal + '" value="' + defaultVal + '" class="slider" id="width-slider">';
+        var sliderElem = '<input id="' + id + '" type="range" min="' + minVal + '" max="' + maxVal + '" value="' + defaultVal + '" class="slider" id="width-slider" step="' + quantizeVal + '"">';
 
         $groupElem = $(groupElem);
         $labelElem = $(labelElem);
@@ -524,10 +549,10 @@
         $sliderElem = $(sliderElem);
 
         $sliderElem.on('input', function () {
-            var val = $(this).val();
-            val = Math.round(val / quantizeVal);
-            val *= quantizeVal;
-            $(this).val(val);
+            // var val = $(this).val();
+            // val = Math.round(val / quantizeVal);
+            // val *= quantizeVal;
+            // $(this).val(val);
             $('#' + valDisplayId).html($(this).val());
         })
 
@@ -557,6 +582,10 @@
             var base64 = $(this).attr('src');
             saveBase64AsFile(base64, (i+1) + '.png');
         });
+    }
+
+    function clearVariance() {
+        variance = null;
     }
 
     function saveBase64AsFile(base64, fileName) {

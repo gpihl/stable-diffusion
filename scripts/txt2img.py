@@ -31,17 +31,12 @@ def unflatten(l, n):
         t = t[n:]  
     return res
 
-def parse_options(input_opt):
-    input_opt.batch_size = int(input_opt.batch_size)
-    input_opt.W = int(input_opt.W)
-    input_opt.H = int(input_opt.H)
-    input_opt.seed = int(input_opt.seed)
-    input_opt.ddim_steps = int(input_opt.ddim_steps)    
-    # input_opt.ddim_eta = float(input_opt.ddim_eta) / 100
-
+def parse_options(input_opt, device):
     opt = {
         'prompt': 'Hej hej',
-        'seed': 43,
+        # 'seed': 43,
+        # 'variance_seed': 43,
+        # 'variance_scale': 0.05,
         'ddim_steps': 50,
         'fixed_code': True,
         'ddim_eta': 0.0,
@@ -53,67 +48,111 @@ def parse_options(input_opt):
         'precision': 'autocast',
     }
 
+    input_opt.batch_size = int(input_opt.batch_size)
+    input_opt.W = int(input_opt.W)
+    input_opt.H = int(input_opt.H)
+    input_opt.seeds = list(map(int,input_opt.seeds))
+    # input_opt.variance_seeds = list(map(int,input_opt.variance_seeds))    
+    input_opt.ddim_steps = int(input_opt.ddim_steps)    
+    input_opt.ddim_eta = float(input_opt.ddim_eta)
+    input_opt.scale = float(input_opt.scale)
+    input_opt.variance_scale = float(input_opt.variance_scale)
+
+    # if hasattr(input_opt, 'variance_vector'):
+    if input_opt.variance_vector is not None:    
+        shape = [opt['C'], opt['H'] // opt['f'], opt['W'] // opt['f']]     
+        input_opt.start_code_variance = torch.tensor(list(map(float, input_opt.variance_vector)), device=device).reshape(-1, *shape)
+
     opt.update(input_opt.__dict__)
     opt = ObjectFromDict(opt)
-    # opt = namedtuple("ObjectName", opt.keys())(*opt.values())
-
+    
     return opt
+
+def get_learned_conditioning_wrapper(opt, model, device):
+    # seed_everything(variance_seed)
+    c = model.get_learned_conditioning(opt.prompt)
+    # print(c.size())
+    # tmp_var = opt.variance_scale * torch.randn([1, 77, 768], device=device)
+    # return c + tmp_var
+    return c
+
+def get_start_code_and_new_variance(seed, opt, model, device, i):
+    seed_everything(seed)
+    shape = [1, opt.C, opt.H // opt.f, opt.W // opt.f]
+    start_code = torch.randn(shape, device=device)
+    new_variance = torch.zeros(shape)
+
+    if hasattr(opt, 'start_code_variance'):
+        existing_variance = opt.start_code_variance.clone()
+        seed_everything(round((time.time() * 10000000) % 100000) + i)
+        new_variance = torch.add(opt.variance_scale * torch.randn(shape, device=device), existing_variance)
+        start_code = torch.add(start_code, new_variance)
+        mean, std, var = torch.mean(start_code), torch.std(start_code), torch.var(start_code)
+        start_code = (start_code - mean) / std
+
+    seed_everything(seed)
+
+    return start_code, new_variance.flatten().tolist()
+
+def get_start_codes_and_new_variances(opt, model, device):
+    tensors = []
+    new_variances = []
+    for i in range(opt.batch_size):
+        start_code, new_variance = get_start_code_and_new_variance(opt.seeds[i], opt, model, device, i)
+        tensors.append(start_code)
+        new_variances.append(new_variance)
+
+    start_codes = torch.cat(tuple(tensors))
+    return start_codes, new_variances
+
+def get_learned_conditionings(opt, model, device):
+    tensors = []
+    for i in range(opt.batch_size):
+        tensors.append(get_learned_conditioning_wrapper(opt, model, device))
+
+    cs = torch.cat(tuple(tensors))
+    return cs
 
 def txt2img(input_opt, model, device):
     print('Starting txt2img...')
-    opt = parse_options(input_opt)
+    opt = parse_options(input_opt, device)
 
-    seed_everything(opt.seed)
-    sampler = PLMSSampler(model)
-    # sampler = DDIMSampler(model)
-    data = [opt.batch_size * [opt.prompt]]
-
-    start_code = None
-    if opt.fixed_code:
-        tensors = []
-        seed = opt.seed
-        for i in range(opt.batch_size):
-            tmp = torch.randn([1, opt.C, opt.H // opt.f, opt.W // opt.f], device=device)
-            tensors.append(tmp)
-            seed += 1
-            seed_everything(seed)            
-        
-        start_code = torch.cat(tuple(tensors))
+    # sampler = PLMSSampler(model)
+    sampler = DDIMSampler(model)
+    
+    start_codes, new_variances = get_start_codes_and_new_variances(opt, model, device)
+    cs = get_learned_conditionings(opt, model, device)
 
     images = []
-
     precision_scope = autocast if opt.precision=="autocast" else nullcontext
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
-                for n in trange(1, desc="Sampling"):
-                    for prompts in tqdm(data, desc="data"):
-                        uc = None
-                        if opt.scale != 1.0:
-                            uc = model.get_learned_conditioning(opt.batch_size * [""])
+                uc = None
+                if opt.scale != 1.0:
+                    uc = model.get_learned_conditioning(opt.batch_size * [""])
 
-                        c = model.get_learned_conditioning(prompts)
-                        shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
-                        samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
-                                                         conditioning=c,
-                                                         batch_size=opt.batch_size,
-                                                         shape=shape,
-                                                         verbose=False,
-                                                         unconditional_guidance_scale=opt.scale,
-                                                         unconditional_conditioning=uc,
-                                                         eta=opt.ddim_eta,
-                                                         x_T=start_code)
+                shape = [opt.C, opt.H // opt.f, opt.W // opt.f]
+                samples_ddim, _ = sampler.sample(S=opt.ddim_steps,
+                                                    conditioning=cs,
+                                                    batch_size=opt.batch_size,
+                                                    shape=shape,
+                                                    verbose=False,
+                                                    unconditional_guidance_scale=opt.scale,
+                                                    unconditional_conditioning=uc,
+                                                    eta=opt.ddim_eta,
+                                                    x_T=start_codes)
 
-                        x_samples_ddim = model.decode_first_stage(samples_ddim)
-                        x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-                        for x_sample in x_samples_ddim:
-                            x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-                            images.append(Image.fromarray(x_sample.astype(np.uint8)))
+                x_samples_ddim = model.decode_first_stage(samples_ddim)
+                x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                for x_sample in x_samples_ddim:
+                    x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                    images.append(Image.fromarray(x_sample.astype(np.uint8)))
 
     print(f"Your samples are ready \n"
           f" \nEnjoy.")
     
-    return images
+    return images, new_variances
 
 def slerp(val, low, high):
     low_norm = low/torch.norm(low)
@@ -166,8 +205,6 @@ def interpolate_prompts(input_opts, model, device):
     fps = 25
 
     frames_per_degree = fps / degrees_per_second
-
-    print(frames_per_degree)
 
     previous_c = None
     previous_start_code = None
