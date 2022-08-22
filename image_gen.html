@@ -307,30 +307,27 @@
             <div class="slider-title">
                 Number of images
             </div>
-            <input id="num-imgs" type="number" class="form-control settings-input" value="4" max="20" min="1" onclick="this.select();">
+            <input id="num-imgs" type="number" class="form-control settings-input" value="3" max="16" min="1" onclick="this.select();">
         </div>
         <div id="variation-group" style="display: none; position: relative;">
             <span class="variation-close-cross" onclick="clearVariance();" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Exit variation mode"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>
         </div>
         <hr/>
-        
         <div class="slider-group" style="text-align: center;">
             <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
                 Save images <i class="fa-solid fa-floppy-disk ml-2"></i>
             </button>         
         </div>            
-        
     </div>    
     <div id="image-grid-elem" class="image-grid row">
     </div>
-
 </body>
 
 <script>
     var sliderOptionArr = [
         { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64, units: 'px' },
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64, units: 'px' },
-        { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 50, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
+        { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 30, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
         { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.5 },        
         // { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
@@ -387,7 +384,7 @@
             return;
 
         if (isNaN($(this).val()) || $(this).val() == '') {
-            $(this).val(min);
+            $(this).val('');
             return;
         }
 
@@ -458,9 +455,13 @@
         prompt = prompt.toLowerCase();
             
         var numImgs = Number($('#num-imgs').val());
-        var seed = globalSeed;
-        // var seed = Number($('#seed').val());
+        if (numImgs == 0) {
+            alert('Please input a positive number of images.');
+            return;
+        }
 
+        var seed = globalSeed;
+        
         seeds = []
         if (seed == 0) {
             for (i = 0; i < numImgs; i++) 
@@ -561,8 +562,8 @@
                 e.stopPropagation();
                 var params = $(this).data('params');
                 var seed = $(this).attr('seed');
+                clearVariance();                
                 variance = $(this).data('variance');
-                clearVariance();
                 $(this).parent().addClass('active-variance');
                 globalSeed = seed;
                 // $('#seed').val(seed);
