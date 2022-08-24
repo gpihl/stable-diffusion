@@ -6,11 +6,13 @@ import imageio
 import random
 import math
 import imp
+import base64
+from io import BytesIO
 from . import GR
-from PIL import Image
+from PIL import Image, ImageOps
 from tqdm import tqdm, trange
 from itertools import islice
-from einops import rearrange
+from einops import rearrange, repeat
 from torchvision.utils import make_grid
 from pytorch_lightning import seed_everything
 from torch import autocast
@@ -31,9 +33,9 @@ def unflatten(l, n):
     while len(t) > 0:
         res.append(t[:n])
         t = t[n:]  
-    return res
+    return res    
 
-def txt2img2(request_obj, model, device):
+def txt2img(request_obj, model, device):
     imp.reload(GR)
     print('starting to generate images')
     grs = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)
@@ -46,6 +48,33 @@ def txt2img2(request_obj, model, device):
     shape = GR.GR.start_code_shape[1:]
     batch_size = len(grs)
     sampler = DDIMSampler(model)
+
+    mask = None
+    x0 = None
+    np.set_printoptions(threshold=sys.maxsize)
+    if request_obj.mask is not None:
+        mask_img = Image.open(BytesIO(base64.b64decode(request_obj.mask))).convert("RGBA").split()[-1]
+        # print(mask_img)
+        un_masked_img = Image.open(BytesIO(base64.b64decode(request_obj.un_masked))).convert("RGB")
+        mask_img = mask_img.resize((GR.GR.W//GR.GR.f, GR.GR.H//GR.GR.f), resample=Image.LANCZOS)                
+        mask = np.array(mask_img).astype(np.float32) / 255.0
+        un_masked = np.array(un_masked_img).astype(np.float32) / 255.0
+
+        mask = mask[None,None]
+        mask[mask > 0.0] = 0.2
+        mask[mask == 0.0] = 1.0
+        mask[mask == 0.2] = 0.0
+
+        un_masked = un_masked[None].transpose(0, 3, 1, 2)
+        mask = torch.from_numpy(mask).to(device)
+        un_masked = torch.from_numpy(un_masked).to(device)
+
+        un_masked = 2. * un_masked - 1
+        un_masked = repeat(un_masked, '1 ... -> b ...', b=batch_size)
+        x0 = model.get_first_stage_encoding(model.encode_first_stage(un_masked))  # move to latent space        
+        mask = repeat(mask, '1 ... -> b ...', b=batch_size)
+
+
     
     precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext
     with torch.no_grad():
@@ -61,7 +90,9 @@ def txt2img2(request_obj, model, device):
                                                     unconditional_guidance_scale=scale,
                                                     unconditional_conditioning=uc,
                                                     eta=ddim_eta,
-                                                    x_T=start_codes)
+                                                    x_T=start_codes,
+                                                    mask=mask,
+                                                    x0=x0)
 
                 x_samples_ddim = model.decode_first_stage(samples_ddim)
                 x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
@@ -72,7 +103,7 @@ def txt2img2(request_obj, model, device):
     print('finished images')    
     return images, GR.GR.get_new_variance_vectors(grs)
 
-def interpolate_prompts2(request_objs, model, device):
+def interpolate_prompts(request_objs, model, device):
     imp.reload(GR)
     print('starting to interpolate')
     grs = []
@@ -100,8 +131,7 @@ def interpolate_prompts2(request_objs, model, device):
     batch_size = 15
     sampler = DDIMSampler(model)
 
-    # filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
-    filename = 'test.mp4'
+    filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
 
     video_out = imageio.get_writer(filename, mode='I', fps=fps, codec='libx264')
     start_codes = unflatten(start_codes, batch_size)
@@ -132,11 +162,3 @@ def interpolate_prompts2(request_objs, model, device):
 
     print('finished video')
     video_out.close()
-
-# def get_angle(start, end):
-#     start_norm = start/torch.norm(start)
-#     end_norm = end/torch.norm(end)
-#     dot = (start_norm*end_norm).sum().item()
-#     dot = min(max(dot,-1.0),1.0)
-#     omega = math.acos(dot)
-#     return omega

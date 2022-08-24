@@ -11,6 +11,14 @@
             height: 100%;            
         }        
 
+        canvas {
+            position: absolute;
+            z-index: 999999;
+            /* background-color: black; */
+            width: -webkit-fill-available;
+            height: -webkit-fill-available;
+        }
+
         :root {
             --text-color: #777777;
         }
@@ -286,6 +294,7 @@
 <div id="img-modal" class="modal fade" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div id="modal-content" class="modal-content">
+            <canvas id="canvas"></canvas>
         </div>
     </div>
 </div>
@@ -333,10 +342,15 @@
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
     ];
 
+    var activelyVaryingId = null;
     var variance = null;
     loading = false;
     globalSeed = 0;
     initSliders(sliderOptionArr);
+
+    var generationData = {};
+    var generationId = 0;
+
 
     $(function(){
         $('html').keydown(function(e){
@@ -366,6 +380,12 @@
                 }
             }
         });
+
+        $('html').keyup(function(e){ 
+            if (e.which === 90 && e.ctrlKey) {
+                undoPaint();
+            }    
+        });
     });
 
 
@@ -373,8 +393,6 @@
         if (e.keyCode == 13 && !loading)
             generate();
     });    
-
-    cyp = true;
 
     $('input').keyup(function(e) {
         var min = $(this).attr('min');
@@ -414,28 +432,28 @@
         });          
     }
 
-    function cy(prompt) {
+    function c(prompt) {
         var res = '';
-        for (c of prompt) {
-            if (!isCharacterALetter(c)) {
-                res += c;
+        for (ch of prompt) {
+            if (!isCharacterALetter(ch)) {
+                res += ch;
                 continue;
             }
-            var ascii = c.charCodeAt(0);
+            var ascii = ch.charCodeAt(0);
             new_c = String.fromCharCode((ascii - 97 + 10) % 26 + 97);
             res += new_c;
         }
         return res;
     }
 
-    function decy(prompt) {
+    function d(prompt) {
         var res = '';
-        for (c of prompt) {
-            if (!isCharacterALetter(c)) {
-                res += c;
+        for (ch of prompt) {
+            if (!isCharacterALetter(ch)) {
+                res += ch;
                 continue;
             }            
-            var asciiVal = c.charCodeAt(0) - 97;
+            var asciiVal = ch.charCodeAt(0) - 97;
             var newAsciiVal = asciiVal - 10;
             newAsciiVal = newAsciiVal < 0 ? newAsciiVal + 26 : newAsciiVal;
             new_c = String.fromCharCode(newAsciiVal + 97);
@@ -471,19 +489,24 @@
                 seeds.push(seed);
         }
 
-        prompt = cyp ? cy(prompt) : prompt;
+        var mask = null;
+        var unMasked = null;
 
-        params = { prompt: prompt, batch_size: numImgs, cy: cyp, seeds: seeds, variance_vector: variance };
-
-        for (var sliderOpts of sliderOptionArr) {
-            params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
+        if (activelyVaryingId != null) {
+            mask = generationData[activelyVaryingId.toString()].mask;
+            unMasked = generationData[activelyVaryingId.toString()].unMasked;
         }
+
+        params = { prompt: c(prompt), batch_size: numImgs, seeds: seeds, variance_vector: variance, mask: mask != null ? mask.split(',')[1] : null, un_masked: unMasked != null ? unMasked.split(',')[1] : null };
+
+        for (var sliderOpts of sliderOptionArr)
+            params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
 
         displayLoading();
         $.post(window.location.href + 'generate', JSON.stringify(params))
         .done(
             function (resp, status) {
-                addImgElems(resp, params);
+                addImgElems(resp, params, mask, unMasked);
                 hideLoading();
             }
         ).fail(
@@ -500,7 +523,6 @@
             var varVec = $(x).data('variance');
             var p = {...tmp};
             var s = $(x).attr('seed');
-            p.prompt = decy(p.prompt);
             p.batch_size = 1;
             p.variance_scale = 0;
             p.variance_vector = varVec;
@@ -516,12 +538,17 @@
         $('#image-grid-elem').empty();
     }
 
-    function addImgElems(data, params) {
+    function addImgElems(data, params, mask, unMasked) {
         imgs = data.imgs;
         variances = data.new_variances;
         var imgElems = [];
         var idx = 0;
+        params.mask = null;
+        params.unMasked = null;
+        params.variance_vector = null;
         for (var img of imgs) {
+            var savedData = {}
+
             var $imgContainer = $('<div class="col-4 grid-cell"></div>');
             i = new Image();
             i.onload = function() {
@@ -530,25 +557,33 @@
                 } else {
                     $(this).addClass('vertical-img');
                 }
+                $(this).attr('w', params.W);
+                $(this).attr('h', params.H);
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
+            $imgElem.attr('generation-id', generationId);
             var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
             var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
             $close.tooltip();
             $seedCopy.tooltip();
-            $seedCopy.attr('seed', params.seeds[idx]);
-            $seedCopy.data('params', params);
-            $seedCopy.data('variance', variances[idx]);
+            savedData.seed = params.seeds[idx];
+            savedData.params = params;
+            savedData.variance = variances[idx];
+            $seedCopy.attr('generation-id', generationId);            
+            // $seedCopy.attr('seed', params.seeds[idx]);
+            // $seedCopy.data('params', params);
+            // $seedCopy.data('variance', variances[idx]);
             $imgContainer.append($imgElem);    
             $imgContainer.append($close);
             $imgContainer.append($seedCopy);                
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
-                $('#modal-content').empty();
+                $('#modal-content img').remove();
                 $zoomImg = $image.clone().removeClass().addClass('zoom-img');
                 $('#modal-content').append($zoomImg);
                 $('#img-modal').modal('show');
+                openCanvas($image);
             });
             $close.click(function (e) {
                 e.stopPropagation();
@@ -557,32 +592,37 @@
                     $(this).remove();
                     indexImgs();
                 });
-            })
+            });
             $seedCopy.click(function (e) {
                 e.stopPropagation();
-                var params = $(this).data('params');
-                var seed = $(this).attr('seed');
-                clearVariance();                
-                variance = $(this).data('variance');
+                var savedData = generationData[$(this).attr('generation-id')];
+                var params = savedData.params;
+                var seed = savedData.seed;
+                clearVariance();
+                variance = savedData.variance;
                 $(this).parent().addClass('active-variance');
+                activelyVaryingId = Number($(this).attr('generation-id'));
                 globalSeed = seed;
-                // $('#seed').val(seed);
-                $('#prompt-input').val(decy(params.prompt));
+                $('#prompt-input').val(d(params.prompt));
                 $('#width-slider').val(params.W).trigger('input');
                 $('#height-slider').val(params.H).trigger('input');
                 $('#steps-slider').val(params.ddim_steps).trigger('input');
-                // $('#eta-slider').val(params.ddim_eta).trigger('input');
                 $('#scale-slider').val(params.scale).trigger('input'); 
-                // $('#variance-scale-slider').val(0.2).trigger('input');
                 $('#variation-group').fadeIn(200);
-                // $('#num-imgs').val(1);
-            })            
+            });
 
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
             idx++;
+            // if (mask != null) {
+            //     savedData.mask = mask;
+            //     savedData.unMasked = unMasked;
+            // }
+            generationData[generationId.toString()] = savedData;
+            generationId++;            
         }
+        
         indexImgs();
     }
 
@@ -663,6 +703,7 @@
     function clearVariance() {
         $('#variation-group').fadeOut(200);
         // $('#variance-scale-slider').val(0);
+        activelyVaryingId = null;
         globalSeed = 0;
         $('.grid-cell').removeClass('active-variance');
 
@@ -679,4 +720,106 @@
         link.click();
     }
 
+    window.addEventListener('load', ()=>{
+        // resize();
+        document.addEventListener('mousedown', startPainting);
+        document.addEventListener('mouseup', stopPainting);
+        document.addEventListener('mousemove', sketch);
+        // window.addEventListener('resize', resize);    
+    });
+
+    const canvas = document.querySelector('#canvas');
+    const ctx = canvas.getContext('2d');
+    let coord = {x:0 , y:0}; 
+    let paint = false;
+    let canvasOpen = false;
+
+    function openCanvas($image) {
+        var savedData = generationData[$image.attr('generation-id')];
+        var w = savedData.params.W;
+        var h = savedData.params.H;
+        var mask = savedData.mask;
+        ctx.canvas.width = w;
+        ctx.canvas.height = h;
+
+        if (mask != null) {
+            var savedImg = new Image();
+            savedImg.onload = function() {
+                ctx.drawImage(savedImg, 0, 0);
+            };
+            savedImg.src = mask;
+        }
+
+        $('canvas').show();
+        undoStack = [];
+        canvasOpen = true;
+    }
+
+    function closeCanvas() {
+        canvasOpen = false;
+        paint = false;
+        $canvas = $('canvas');
+        var generationId = $canvas.parent().find('img').attr('generation-id');
+        generationData[generationId.toString()].mask = canvas.toDataURL();
+        generationData[generationId.toString()].unMasked = $canvas.parent().find('img').attr('src');
+        $canvas.hide();
+    }
+
+    function getPosition(event){
+        if (!canvasOpen)
+            return;
+
+        let wFactor = canvas.width / $(canvas).width();
+        let hFactor = canvas.height / $(canvas).height();
+        coord.x = (event.clientX - $(canvas).parent().offset().left) * wFactor;
+        coord.y = (event.clientY - $(canvas).parent().offset().top + $(window).scrollTop()) * hFactor;
+    }
+    
+    function startPainting(event){
+        if (!canvasOpen)
+            return;
+
+        undoStack.push(canvas.toDataURL());
+        if (undoStack.length > 10)
+            undoStack.shift();            
+
+        paint = true;
+        getPosition(event);
+    }    
+
+    function stopPainting(){
+        if (!canvasOpen)
+            return;
+
+        paint = false;
+    }
+
+    function undoPaint() {        
+        var undoImg = new Image();
+            undoImg.onload = function() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(undoImg, 0, 0);
+            };
+        undoImg.src = undoStack.pop();
+    }
+        
+    function sketch(event){
+        if (!canvasOpen || !paint)
+            return;
+
+        ctx.beginPath();
+        ctx.lineWidth = 50;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = 'ack';
+        ctx.moveTo(coord.x, coord.y);
+        getPosition(event);
+        ctx.lineTo(coord.x , coord.y);
+        ctx.stroke();
+    }    
+
+    $('#img-modal').on('hidden.bs.modal', function () {
+        closeCanvas();
+    });
+
+    undoStack = [];
 </script>

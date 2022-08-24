@@ -60,7 +60,7 @@ def load_model_from_config(config, ckpt, verbose=False):
     model.eval()
     return model
 
-def decypher(prompt):
+def d(prompt):
     res = ''
     for c in prompt:
         if not c.isalpha():
@@ -95,7 +95,7 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != '/generate' and self.path != '/interpolate':
+            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/inpaint':
                 return                
 
             if self.server.lock:
@@ -103,12 +103,18 @@ class S(BaseHTTPRequestHandler):
                     sleep(3)
 
             self.server.lock = True
-            imp.reload(scripts.txt2img)                
+            imp.reload(scripts.txt2img)
+
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = Payload(post_data)            
 
             if self.path == '/interpolate':
-                self.interpolation_video()
-            else:
-                self.generate_picture()
+                self.interpolate_video(data)
+            elif self.path == '/generate':
+                self.generate_pictures(data)
+            elif self.path == '/inpaint':
+                self.inpaint_picture(data)
 
             self.server.lock = False
    
@@ -116,37 +122,47 @@ class S(BaseHTTPRequestHandler):
             print(traceback.format_exc())
             self.server.lock = False
 
-    def generate_picture(self):
+    def generate_pictures(self, data):
         resp = GenerationResponse()
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        data = Payload(post_data)    
-        if data.cy:
-            data.prompt = decypher(data.prompt)
+        data.prompt = d(data.prompt)
 
-        images, new_variances = scripts.txt2img.txt2img2(data, self.server.model, self.server.device)
-
-        for img in images:
-            buffered = BytesIO()
-            img.save(buffered, 'png')
-            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            resp.imgs.append(img_str)
-
+        images, new_variances = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
+        resp.imgs = base64images(images)
         resp.new_variances = new_variances
 
         self._set_post_response()
-        resp = resp.toJSON()
-        self.wfile.write(resp.encode('utf-8'))   
+        self.wfile.write(resp.toJSON().encode('utf-8'))
 
-    def interpolation_video(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        data = Payload(post_data)
-        input_opts = data.params
-        for i in range(len(input_opts)):
-            input_opts[i] = ObjectFromDict(input_opts[i])
+    def interpolate_video(self, data):
+        for d in data:
+            d.prompt = d(x.prompt)
 
-        scripts.txt2img.interpolate_prompts2(input_opts, self.server.model, self.server.device)
+        data = list(map(ObjectFromDict, data))
+        scripts.txt2img.interpolate_prompts(data, self.server.model, self.server.device)
+        #TODO, return video to client
+
+    def inpaint_picture(self, data):
+        resp = GenerationResponse()
+        data.prompt = d(data.prompt)
+
+        images, new_variances = scripts.txt2img.inpaint_picture(data, self.server.model, self.server.device)
+        resp.imgs = base64images(images)
+        resp.new_variances = new_variances
+
+        self._set_post_response()
+        self.wfile.write(resp.toJSON().encode('utf-8'))           
+
+def base64images(images):
+    imgs = []
+    for img in images:
+        buffered = BytesIO()
+        img.save(buffered, 'png')
+        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        imgs.append(img_str)
+
+    return imgs
+
+
 
 def run(server_class=HTTPServer, handler_class=S, port=8080):
     server_address = ('', port)
