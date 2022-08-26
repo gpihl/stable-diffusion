@@ -6,6 +6,20 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <style>   
+        ::-webkit-scrollbar {
+            display: none;
+        }
+
+        .noselect {
+            -webkit-touch-callout: none; /* iOS Safari */
+                -webkit-user-select: none; /* Safari */
+                -khtml-user-select: none; /* Konqueror HTML */
+                -moz-user-select: none; /* Old versions of Firefox */
+                    -ms-user-select: none; /* Internet Explorer/Edge */
+                        user-select: none; /* Non-prefixed version, currently
+                                            supported by Chrome, Edge, Opera and Firefox */
+        }
+
         body {
             background-color: #303030; 
             height: 100%;            
@@ -17,6 +31,7 @@
             /* background-color: black; */
             width: -webkit-fill-available;
             height: -webkit-fill-available;
+            cursor: crosshair;
         }
 
         :root {
@@ -76,6 +91,7 @@
         .grid-cell {
             text-align: center;
             margin-bottom: 6px;
+            cursor: pointer;
         }
 
         .horizontal-img {
@@ -91,8 +107,10 @@
             border-radius: 7px;            
         }
 
-        .zoom-img {
-            /* margin: auto; */
+        .img-and-canvas-container {
+            margin: auto;
+            height: -webkit-fill-available;
+            position: relative;
         }
 
         .grid-cell:after {
@@ -104,10 +122,6 @@
     
         .grid-cell > img {
             position: absolute;
-        }
-
-        img:hover {
-            cursor: pointer;
         }
 
         .form-control:focus {
@@ -228,7 +242,7 @@
             top: 6px;
             left: 9px;
             cursor: pointer;
-            opacity: 0.2;
+            opacity: 0.4;
             font-size: 20px;
         }
 
@@ -241,13 +255,45 @@
             top: 6px;
             right: 30px;
             cursor: pointer;
-            opacity: 0.2;
+            opacity: 0.4;
             font-size: 20px;            
         }     
         
         .seed-copy:hover {
             opacity: 1.0;
-        }        
+        }
+
+        .mask-icon {
+            position: absolute;
+            bottom: 24px;
+            right: 34px;
+            opacity: 0.4;
+            font-size: 20px;
+        }             
+
+        .inpainting-icon {
+            position: absolute;
+            bottom: 24px;
+            right: 30px;
+            opacity: 0.4;
+            font-size: 20px;
+            z-index: 9999999;
+            cursor: pointer;
+        }          
+        
+        .clear-mask-icon {
+            position: absolute;
+            bottom: 29px;
+            left: 8px;
+            opacity: 0.4;
+            font-size: 20px;
+            z-index: 9999999;
+            cursor: pointer;            
+        }
+
+        .inpainting-icon:hover {
+            opacity: 1.0;
+        }   
 
         /* Chrome, Safari, Edge, Opera */
         input::-webkit-outer-spin-button,
@@ -269,14 +315,20 @@
             background-color: #606060 !important;
         }
 
+        .zoom-img {
+            height: 100%;
+            width: -webkit-fill-available;            
+        }
+
         .modal-dialog {
-            max-width: 1000px !important;
+            height: 90%;
+            width: 100%;
+            max-width: unset;
         }
 
         .modal-content {
-            /* max-width: fit-content;
-            margin: auto;             */
-            /* background: transparent; */
+            height: 100%;
+            background-color: transparent;
         }
 
         .x-mark-bg {
@@ -291,15 +343,17 @@
     </style>
 </head>
 
-<div id="img-modal" class="modal fade" tabindex="-1">
+<div id="img-modal" class="modal fade noselect" tabindex="-1" onclick="$(this).modal('hide');" oncontextmenu="return false;">
     <div class="modal-dialog modal-dialog-centered">
         <div id="modal-content" class="modal-content">
-            <canvas id="canvas"></canvas>
+            <div class="img-and-canvas-container">
+                <canvas id="canvas" style="display: none;"></canvas>
+            </div>
         </div>
     </div>
 </div>
 
-<body>
+<body class="noselect">
     <div class="input-bar">
         <div class="logo mr-3"><i class="fa-solid fa-fan mr-2"></i>G-Diff</div>
         <button id="generate-button" type="button" class="btn btn-secondary ml-3 mr-1 mt-1" onclick="generate();">
@@ -337,7 +391,7 @@
         { name: 'Width', id: 'width-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'W', quantizeVal: 64, units: 'px' },
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64, units: 'px' },
         { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 30, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
-        { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7.5, sdName: 'scale', quantizeVal: 0.5 },        
+        { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7, sdName: 'scale', quantizeVal: 0.5 },        
         // { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
     ];
@@ -371,12 +425,10 @@
                             $('#img-modal').modal('hide');
                             return;
                         }
-                    }                    
-
-                    $newZoomImg = $('#image-grid-elem').children().eq(idx).children('img').first().clone();
-                    $newZoomImg.removeClass().addClass('zoom-img');                
-                    $zoomImg.parent().append($newZoomImg);
-                    $zoomImg.remove();
+                    }
+                    closeCanvas();
+                    $newZoomImg = $('#image-grid-elem').children().eq(idx).children('img').first();
+                    addZoomImgToModal($newZoomImg);
                 }
             }
         });
@@ -538,6 +590,14 @@
         $('#image-grid-elem').empty();
     }
 
+    function addZoomImgToModal($image) {
+        $('.img-and-canvas-container img').remove();
+        $('.img-and-canvas-container .inpainting-icon').remove();
+        $zoomImg = $image.clone().removeClass().addClass('zoom-img');
+        $('.img-and-canvas-container').append($zoomImg);
+        addInpaintingIcons($image);
+    }
+
     function addImgElems(data, params, mask, unMasked) {
         imgs = data.imgs;
         variances = data.new_variances;
@@ -557,14 +617,15 @@
                 } else {
                     $(this).addClass('vertical-img');
                 }
-                $(this).attr('w', params.W);
-                $(this).attr('h', params.H);
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
             $imgElem.attr('generation-id', generationId);
-            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
-            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations"><i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
+            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
+                '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
+            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations">' + 
+                '<i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
+
             $close.tooltip();
             $seedCopy.tooltip();
             savedData.seed = params.seeds[idx];
@@ -574,16 +635,14 @@
             // $seedCopy.attr('seed', params.seeds[idx]);
             // $seedCopy.data('params', params);
             // $seedCopy.data('variance', variances[idx]);
+            $imgContainer.attr('generation-id', generationId); 
             $imgContainer.append($imgElem);    
             $imgContainer.append($close);
-            $imgContainer.append($seedCopy);                
+            $imgContainer.append($seedCopy); 
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
-                $('#modal-content img').remove();
-                $zoomImg = $image.clone().removeClass().addClass('zoom-img');
-                $('#modal-content').append($zoomImg);
+                addZoomImgToModal($image);     
                 $('#img-modal').modal('show');
-                openCanvas($image);
             });
             $close.click(function (e) {
                 e.stopPropagation();
@@ -615,10 +674,11 @@
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
             idx++;
-            // if (mask != null) {
-            //     savedData.mask = mask;
-            //     savedData.unMasked = unMasked;
-            // }
+            if (mask != null) {
+                savedData.mask = mask;
+                savedData.unMasked = unMasked;
+                addMaskIcon(generationId);
+            }
             generationData[generationId.toString()] = savedData;
             generationId++;            
         }
@@ -749,10 +809,78 @@
             };
             savedImg.src = mask;
         }
-
+        $('.clear-mask-icon').show();
         $('canvas').show();
         undoStack = [];
         canvasOpen = true;
+    }
+
+    function hasNoMaskIcon(generationId) {
+        return $('.grid-cell[generation-id=' + generationId + '] .mask-icon').length == 0;
+    }
+
+    function addInpaintingIcons($image) {
+        var $inpaintingIcon = createInpaintingIcon();
+        var $clearMaskIcon = createClearMaskIcon();
+
+        $inpaintingIcon.click(function (event) {
+            event.stopPropagation();
+            if (!canvasOpen)
+                openCanvas($image);
+            else
+                closeCanvas();
+        });
+
+        $clearMaskIcon.click(function (event) {
+            event.stopPropagation();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        $inpaintingIcon.mousedown(function (event) {
+            event.stopPropagation();
+        });
+        $inpaintingIcon.mouseup(function (event) {
+            event.stopPropagation();
+        });
+        $clearMaskIcon.mousedown(function (event) {
+            event.stopPropagation();
+        });
+        $clearMaskIcon.mouseup(function (event) {
+            event.stopPropagation();
+        });        
+
+        $('.img-and-canvas-container').append($inpaintingIcon);
+        $('.img-and-canvas-container').append($clearMaskIcon);
+    }
+
+    function addMaskIcon(generationId) {
+        var $maskIcon = createMaskIcon();
+        $('.grid-cell[generation-id=' + generationId + ']').append($maskIcon);
+    }
+
+    function removeMaskIcon(generationId) {
+        $('.grid-cell[generation-id=' + generationId + '] .mask-icon').remove();
+    }    
+
+    function createMaskIcon() {
+        return $('<span class="mask-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
+            '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-solid fa-mask"></i></span>');
+    }
+    
+    function createInpaintingIcon() {
+        return $('<span class="inpainting-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
+            '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-solid fa-mask"></i></span>');
+    }             
+
+    function createClearMaskIcon() {
+        return $('<span style="display: none;"class="clear-mask-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
+            '<i class="x-mark-fg fa-solid fa-trash-can"></i></span>');
+    }              
+    
+    function isCanvasBlank(canvas) {
+        return !canvas.getContext('2d')
+            .getImageData(0, 0, canvas.width, canvas.height).data
+            .some(channel => channel !== 0);
     }
 
     function closeCanvas() {
@@ -760,12 +888,24 @@
         paint = false;
         $canvas = $('canvas');
         var generationId = $canvas.parent().find('img').attr('generation-id');
-        generationData[generationId.toString()].mask = canvas.toDataURL();
-        generationData[generationId.toString()].unMasked = $canvas.parent().find('img').attr('src');
+
+        if (!isCanvasBlank(canvas)) {
+            generationData[generationId.toString()].mask = canvas.toDataURL();
+            generationData[generationId.toString()].unMasked = $canvas.parent().find('img').attr('src');
+            if (hasNoMaskIcon(generationId))
+                addMaskIcon(generationId);            
+        } else {
+            generationData[generationId.toString()].mask = null;
+            generationData[generationId.toString()].unMasked = null;
+            if (!hasNoMaskIcon(generationId))
+                removeMaskIcon(generationId);
+        }
+        
+        $('.clear-mask-icon').hide();
         $canvas.hide();
     }
 
-    function getPosition(event){
+    function getPosition(event) {
         if (!canvasOpen)
             return;
 
@@ -774,8 +914,17 @@
         coord.x = (event.clientX - $(canvas).parent().offset().left) * wFactor;
         coord.y = (event.clientY - $(canvas).parent().offset().top + $(window).scrollTop()) * hFactor;
     }
+
+    $(canvas).click(function (event) {
+        event.stopPropagation();
+    });
     
-    function startPainting(event){
+    function startPainting(event) {
+        if (event.button == 0)
+            ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+        else if (event.button == 2)
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0)';
+
         if (!canvasOpen)
             return;
 
@@ -787,14 +936,17 @@
         getPosition(event);
     }    
 
-    function stopPainting(){
+    function stopPainting(e) {
         if (!canvasOpen)
             return;
 
         paint = false;
     }
 
-    function undoPaint() {        
+    function undoPaint() {       
+        if (undoStack.length == 0) 
+            return;
+
         var undoImg = new Image();
             undoImg.onload = function() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -810,7 +962,6 @@
         ctx.beginPath();
         ctx.lineWidth = 50;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = 'ack';
         ctx.moveTo(coord.x, coord.y);
         getPosition(event);
         ctx.lineTo(coord.x , coord.y);

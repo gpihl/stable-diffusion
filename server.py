@@ -113,8 +113,6 @@ class S(BaseHTTPRequestHandler):
                 self.interpolate_video(data)
             elif self.path == '/generate':
                 self.generate_pictures(data)
-            elif self.path == '/inpaint':
-                self.inpaint_picture(data)
 
             self.server.lock = False
    
@@ -140,17 +138,6 @@ class S(BaseHTTPRequestHandler):
         data = list(map(ObjectFromDict, data))
         scripts.txt2img.interpolate_prompts(data, self.server.model, self.server.device)
         #TODO, return video to client
-
-    def inpaint_picture(self, data):
-        resp = GenerationResponse()
-        data.prompt = d(data.prompt)
-
-        images, new_variances = scripts.txt2img.inpaint_picture(data, self.server.model, self.server.device)
-        resp.imgs = base64images(images)
-        resp.new_variances = new_variances
-
-        self._set_post_response()
-        self.wfile.write(resp.toJSON().encode('utf-8'))           
 
 def base64images(images):
     imgs = []
