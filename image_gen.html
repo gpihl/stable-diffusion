@@ -5,341 +5,64 @@
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-    <style>   
-        ::-webkit-scrollbar {
-            display: none;
-        }
+    <style>
+        ::-webkit-scrollbar { display: none; }
+        :root { --text-color: #777777; }
 
-        .noselect {
-            -webkit-touch-callout: none; /* iOS Safari */
-                -webkit-user-select: none; /* Safari */
-                -khtml-user-select: none; /* Konqueror HTML */
-                -moz-user-select: none; /* Old versions of Firefox */
-                    -ms-user-select: none; /* Internet Explorer/Edge */
-                        user-select: none; /* Non-prefixed version, currently
-                                            supported by Chrome, Edge, Opera and Firefox */
-        }
+        #prompt-input { width: 100%; width: -moz-available; width: -webkit-fill-available; width: fill-available; }
+        #generate-button { float: right; width: 130px; color: #c1bbbb; }
+        #variation-group { background-color: #532424; border-radius: 7px; margin-top: 14px; padding-bottom: 10px; display: none; position: relative; }
+        #download-button { width: 250px; color: #c1bbbb; }
 
-        body {
-            background-color: #303030; 
-            height: 100%;            
-        }        
+        body { background-color: #303030; height: 100%; }
+        canvas { position: absolute; z-index: 999999; width: -webkit-fill-available; height: calc(100% - 21px); cursor: crosshair; }
+        hr { margin-top: 1rem; margin-bottom: unset !important; border: 0; border-top: 1px solid rgb(62 62 62); }
+        button { background-color: #606060 !important; }
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
 
-        canvas {
-            position: absolute;
-            z-index: 999999;
-            /* background-color: black; */
-            width: -webkit-fill-available;
-            height: -webkit-fill-available;
-            cursor: crosshair;
-        }
+        .noselect { -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+        .logo { color: #777777; font-size: 30px; float: left; }
+        .active-variance { border: 9px solid #a93a3a; border-radius: 15px; }
+        .settings-input { height: 25px; text-align: right; margin-top: 6px; }
+        .input-bar { z-index: 1000; position: fixed; width: 100%; padding: 9px; background-color: #292525; }
+        .control-panel { z-index: 1000; position: fixed; top: 68px; right: 0px; height: 100%; width: 300px; background-color: #2f2a2a; padding: 15px; }
+        .fade { transition:100ms !important; }
 
-        :root {
-            --text-color: #777777;
-        }
+        .image-grid { position: absolute; width: -webkit-calc(100% - 302px); width: -moz-calc(100% - 302px); width: calc(100% - 302px); top: 69px; left: 16px; }            
+        .image-cell { text-align: center; margin-bottom: 6px; cursor: pointer; }
+        .image-cell:after { content: "s"; display: block; padding-bottom: 100%; color: #00000000; }
+        .image-cell > img { position: absolute; }
+        .horizontal-img { width: 100%; transform: translate(-50%, -50%); top: 50%; border-radius: 7px; }
+        .vertical-img { height: 100%; transform: translateX(-50%); border-radius: 7px; }
+        .image-icon { position: absolute; cursor: pointer; opacity: 0.6; font-size: 20px; }
+        .image-icon:hover { opacity: 1.0; }
+        .icon-right { right: 30px; }
+        .icon-left { left: 9px; }
+        .icon-top { top: 6px; }
+        .icon-bottom { bottom: 24px; }
+        .icon-bg { position: absolute; color: black; }
+        .icon-fg { position: absolute; color: white; }
+        .clear-mask-icon, .inpainting-icon { z-index: 9999999; }
 
-        .logo {
-            color: #777777;
-            font-size: 30px;
-            float: left;
-        }
+        .img-and-canvas-container { margin: auto; height: -webkit-fill-available; position: relative; }
+        .zoom-img { height: calc(100% - 21px); width: -webkit-fill-available; border-radius: 0px 0px 8px 8px; }   
+        .modal-prompt-label { margin: auto; background: #303030; text-align: center; font-size: 16px; color: var(--text-color); max-width: fit-content; max-height: 32px; min-width: -webkit-fill-available; border-radius: 8px 8px 0px 0px; }
 
-        #prompt-input {
-            width: 100%;
-            width: -moz-available;          
-            width: -webkit-fill-available;  
-            width: fill-available; 
-        }        
-
-        #generate-button {
-            float: right; 
-            width: 130px; 
-            color: #c1bbbb;
-        }
+        .form-control:focus { border-color: #464646; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(156, 156, 156, 0.6); background-color: #ababab; }
+        .form-control:disabled { background-color: #1a1717; }
+        .form-control { border-color: #464646; background-color: #292525; color: var(--text-color); }
         
+        .slider { -webkit-appearance: none; width: 100%; height: 15px; background: #777777; border-radius: 4px; outline: none; opacity: 0.7; -webkit-transition: .2s; transition: opacity .2s; margin-top: 6px; }
+        .slider:hover { opacity: 1; }
+        .slider::-webkit-slider-thumb { border-radius: 7px; -webkit-appearance: none; appearance: none; width: 25px; height: 25px; background: #575757; cursor: pointer; }
+        .slider::-moz-range-thumb { border-radius: 10px; width: 25px; height: 25px; background: #575757; cursor: pointer; }
+        .slider-group { padding: 7px; }
+        .slider-title { color: var(--text-color); font-size: 15px; padding: 3px; margin-bottom: 5px; display: inline; }
+        .slider-val { color: var(--text-color); font-size: 13px; padding: 3px; margin-bottom: 5px; display: inline; }        
 
-        
-        .variation-close-cross {
-            top: 6px;
-            right: -98px;
-            cursor: pointer;
-            opacity: 0.2;
-            font-size: 20px;
-            right: 26px;
-            position: absolute;
-        }        
-
-        #variation-group {
-            background-color: #532424;
-            border-radius: 7px;
-            margin-top: 14px;
-            padding-bottom: 10px;
-        }
-
-        hr {
-            margin-top: 1rem;
-            margin-bottom: unset !important;
-            border: 0;
-            border-top: 1px solid rgb(62 62 62);
-        }   
-        
-        .active-variance {
-            border: 9px solid #a93a3a;
-            border-radius: 19px;
-        }        
-
-        .grid-cell {
-            text-align: center;
-            margin-bottom: 6px;
-            cursor: pointer;
-        }
-
-        .horizontal-img {
-            width: 100%;
-            transform: translate(-50%, -50%);
-            top: 50%;
-            border-radius: 7px;
-        }
-
-        .vertical-img {
-            height: 100%;
-            transform: translateX(-50%); 
-            border-radius: 7px;            
-        }
-
-        .img-and-canvas-container {
-            margin: auto;
-            height: -webkit-fill-available;
-            position: relative;
-        }
-
-        .grid-cell:after {
-            content: "s";
-            display: block;
-            padding-bottom: 100%;
-            color: #00000000;
-        }        
-    
-        .grid-cell > img {
-            position: absolute;
-        }
-
-        .form-control:focus {
-            border-color: #464646;
-            box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075), 0 0 8px rgba(156, 156, 156, 0.6);
-            background-color: #ababab;
-        }
-
-        .form-control:disabled {
-            background-color: #1a1717;
-        }
-
-        .form-control {
-            /* width: unset; */
-            border-color: #464646;
-            background-color: #292525;
-            color: var(--text-color);
-        }
-
-        .settings-input {
-            height: 25px;
-            text-align: right;
-            margin-top: 6px;
-        }
-
-        .input-bar {
-            z-index: 1000;
-            position: fixed;
-            width: 100%;
-            padding: 9px;
-            background-color: #292525;
-        }
-    
-        .control-panel {
-            z-index: 1000;
-            position: fixed;
-            top: 68px;
-            right: 0px;    
-            height: 100%;        
-            /* border-radius: 7px; */
-            width: 300px;
-            background-color: #2f2a2a;
-            padding: 15px;
-        }
-    
-        .image-grid {
-            /* border-radius: 7px; */
-            /* padding: 10px; */
-            /* padding-top: 13px; */
-            position: absolute;
-            /* background-color: #292525; */
-            width: -webkit-calc(100% - 302px);
-            width: -moz-calc(100% - 302px);
-            width: calc(100% - 302px);     
-            top: 69px;       
-            left: 16px;
-            /* min-height: 430px; */
-        }    
-    
-        .slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 15px;
-            background: #777777;
-            border-radius: 4px;
-            outline: none;
-            opacity: 0.7;
-            -webkit-transition: .2s;
-            transition: opacity .2s;
-            margin-top: 6px;
-        }
-    
-        .slider:hover {
-            opacity: 1;
-        }
-    
-        .slider::-webkit-slider-thumb {
-            border-radius: 7px;
-            -webkit-appearance: none;
-            appearance: none;
-            width: 25px;
-            height: 25px;
-            background: #575757;
-            cursor: pointer;
-        }
-    
-        .slider::-moz-range-thumb {
-            border-radius: 10px;
-            width: 25px;
-            height: 25px;
-            background: #575757;
-            cursor: pointer;
-        }
-
-        .slider-group {
-            padding: 7px;
-            /* margin-bottom: 5px; */
-        }
-
-        .slider-title {
-            color: var(--text-color);
-            font-size: 15px;
-            padding: 3px;
-            margin-bottom: 5px;            
-            display: inline;
-        }
-
-        .slider-val {
-            color: var(--text-color);
-            font-size: 13px;
-            padding: 3px;
-            margin-bottom: 5px;
-            display: inline;
-        }
-
-        .close-cross {
-            position: absolute;
-            top: 6px;
-            left: 9px;
-            cursor: pointer;
-            opacity: 0.4;
-            font-size: 20px;
-        }
-
-        .close-cross:hover, .variation-close-cross:hover {
-            opacity: 1.0;
-        }
-
-        .seed-copy {
-            position: absolute;
-            top: 6px;
-            right: 30px;
-            cursor: pointer;
-            opacity: 0.4;
-            font-size: 20px;            
-        }     
-        
-        .seed-copy:hover {
-            opacity: 1.0;
-        }
-
-        .mask-icon {
-            position: absolute;
-            bottom: 24px;
-            right: 34px;
-            opacity: 0.4;
-            font-size: 20px;
-        }             
-
-        .inpainting-icon {
-            position: absolute;
-            bottom: 24px;
-            right: 30px;
-            opacity: 0.4;
-            font-size: 20px;
-            z-index: 9999999;
-            cursor: pointer;
-        }          
-        
-        .clear-mask-icon {
-            position: absolute;
-            bottom: 29px;
-            left: 8px;
-            opacity: 0.4;
-            font-size: 20px;
-            z-index: 9999999;
-            cursor: pointer;            
-        }
-
-        .inpainting-icon:hover {
-            opacity: 1.0;
-        }   
-
-        /* Chrome, Safari, Edge, Opera */
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-
-        /* Firefox */
-        input[type=number] {
-            -moz-appearance: textfield;
-        }
-
-        .fade {
-           transition:100ms !important;
-        }
-
-        button {
-            background-color: #606060 !important;
-        }
-
-        .zoom-img {
-            height: 100%;
-            width: -webkit-fill-available;            
-        }
-
-        .modal-dialog {
-            height: 90%;
-            width: 100%;
-            max-width: unset;
-        }
-
-        .modal-content {
-            height: 100%;
-            background-color: transparent;
-        }
-
-        .x-mark-bg {
-            position: absolute;
-            color: black;            
-        }
-
-        .x-mark-fg {
-            position: absolute;
-            color: white;
-        }        
+        .modal-dialog { height: 90%; width: 100%; max-width: unset; }
+        .modal-content { height: 100%; background-color: transparent; }
     </style>
 </head>
 
@@ -347,6 +70,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div id="modal-content" class="modal-content">
             <div class="img-and-canvas-container">
+                <div class="modal-prompt-label"></div>
                 <canvas id="canvas" style="display: none;"></canvas>
             </div>
         </div>
@@ -367,23 +91,20 @@
     </div>
     <div id="control-panel-elem" class="control-panel">
         <div class="slider-group">
-            <div class="slider-title">
-                Number of images
-            </div>
+            <div class="slider-title">Number of images</div>
             <input id="num-imgs" type="number" class="form-control settings-input" value="3" max="16" min="1" onclick="this.select();">
         </div>
-        <div id="variation-group" style="display: none; position: relative;">
-            <span class="variation-close-cross" onclick="clearVariance();" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Exit variation mode"><i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>
+        <div id="variation-group">
+            <span class="image-icon icon-right icon-top" onclick="clearVariance();" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Exit variation mode"><i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>
         </div>
         <hr/>
         <div class="slider-group" style="text-align: center;">
-            <button id="download-button" type="button" class="btn btn-secondary mt-3" style="width: 250px; color: #c1bbbb;" onclick="downloadAllImgs();">
+            <button id="download-button" type="button" class="btn btn-secondary mt-3" onclick="downloadAllImgs();">
                 Save images <i class="fa-solid fa-floppy-disk ml-2"></i>
             </button>         
         </div>            
     </div>    
-    <div id="image-grid-elem" class="image-grid row">
-    </div>
+    <div id="image-grid-elem" class="image-grid row"></div>
 </body>
 
 <script>
@@ -392,21 +113,28 @@
         { name: 'Height', id: 'height-slider', minVal: 128, maxVal: 1024, defaultVal: 512, sdName: 'H', quantizeVal: 64, units: 'px' },
         { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 30, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
         { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7, sdName: 'scale', quantizeVal: 0.5 },        
-        // { name: 'Stochasticity (eta)', id: 'eta-slider', minVal: 0, maxVal: 1, defaultVal: 0, sdName: 'ddim_eta', quantizeVal: 0.1 },
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
     ];
-
     var activelyVaryingId = null;
     var variance = null;
-    loading = false;
-    globalSeed = 0;
-    initSliders(sliderOptionArr);
-
+    var loading = false;
+    var coord = {x:0 , y:0};
+    var paint = false;
+    var canvasOpen = false;
     var generationData = {};
     var generationId = 0;
+    var undoStack = [];
+    const canvas = document.querySelector('#canvas');
+    const ctx = canvas.getContext('2d');
 
+    $( document ).ready(function() {
+        initSliders(sliderOptionArr);
+        $(canvas).mousedown(startPainting);
+        $(canvas).mouseup(stopPainting);
+        $(canvas).mousemove(sketch);
+        $(canvas).click(function (e) { e.stopPropagation(); });
+        $('#img-modal').on('hidden.bs.modal', closeCanvas);
 
-    $(function(){
         $('html').keydown(function(e){
             if ($('#img-modal').hasClass('show')) {
                 if (e.keyCode == 37 || e.keyCode == 39 || e.keyCode == 88) {
@@ -434,48 +162,46 @@
         });
 
         $('html').keyup(function(e){ 
-            if (e.which === 90 && e.ctrlKey) {
+            if (e.which === 90 && e.ctrlKey)
                 undoPaint();
-            }    
+        });
+
+        $('body').keyup(function(e) {
+            if (e.keyCode == 13 && !loading)
+                generate();
+        });    
+
+        $('input').keyup(function(e) {
+            var min = $(this).attr('min');
+            var max = $(this).attr('max');
+
+            if (!min && !max)
+                return;
+
+            if (isNaN($(this).val()) || $(this).val() == '') {
+                $(this).val('');
+                return;
+            }
+
+            var cur = Number($(this).val());
+
+            if (min) {
+                if (cur < Number(min)) {
+                    $(this).val(min);    
+                    $(this).select();
+                }        
+            }
+            if (max) {
+                if (cur > Number(max)) {
+                    $(this).val(max);
+                    $(this).select();
+                }
+            }        
         });
     });
 
-
-    $('body').keyup(function(e) {
-        if (e.keyCode == 13 && !loading)
-            generate();
-    });    
-
-    $('input').keyup(function(e) {
-        var min = $(this).attr('min');
-        var max = $(this).attr('max');
-
-        if (!min && !max)
-            return;
-
-        if (isNaN($(this).val()) || $(this).val() == '') {
-            $(this).val('');
-            return;
-        }
-
-        var cur = Number($(this).val());
-
-        if (min) {
-            if (cur < Number(min)) {
-                $(this).val(min);    
-                $(this).select();
-            }        
-        }
-        if (max) {
-            if (cur > Number(max)) {
-                $(this).val(max);
-                $(this).select();
-            }
-        }        
-    });
-
     function isCharacterALetter(char) {
-        return (/[a-zA-Z]/).test(char);
+        return char.charCodeAt(0) >= 65 && char.charCodeAt(0) <= 122;
     }    
 
     function indexImgs() {
@@ -486,13 +212,13 @@
 
     function c(prompt) {
         var res = '';
-        for (ch of prompt) {
+        for (var ch of prompt) {
             if (!isCharacterALetter(ch)) {
                 res += ch;
                 continue;
             }
             var ascii = ch.charCodeAt(0);
-            new_c = String.fromCharCode((ascii - 97 + 10) % 26 + 97);
+            new_c = String.fromCharCode((ascii - 65 + 20) % 58 + 65);
             res += new_c;
         }
         return res;
@@ -500,15 +226,15 @@
 
     function d(prompt) {
         var res = '';
-        for (ch of prompt) {
+        for (var ch of prompt) {
             if (!isCharacterALetter(ch)) {
                 res += ch;
                 continue;
             }            
-            var asciiVal = ch.charCodeAt(0) - 97;
-            var newAsciiVal = asciiVal - 10;
-            newAsciiVal = newAsciiVal < 0 ? newAsciiVal + 26 : newAsciiVal;
-            new_c = String.fromCharCode(newAsciiVal + 97);
+            var asciiVal = ch.charCodeAt(0) - 65;
+            var newAsciiVal = asciiVal - 20;
+            newAsciiVal = newAsciiVal < 0 ? newAsciiVal + 58 : newAsciiVal;
+            new_c = String.fromCharCode(newAsciiVal + 65);
             res += new_c;
         }
         return res;
@@ -522,7 +248,7 @@
         if (prompt == '')
             prompt = ' ';
 
-        prompt = prompt.toLowerCase();
+        // prompt = prompt.toLowerCase();
             
         var numImgs = Number($('#num-imgs').val());
         if (numImgs == 0) {
@@ -530,23 +256,24 @@
             return;
         }
 
-        var seed = globalSeed;
-        
-        seeds = []
-        if (seed == 0) {
-            for (i = 0; i < numImgs; i++) 
-                seeds.push(Math.floor(Math.random() * 9999999));
-        } else {
-            for (i = 0; i < numImgs; i++) 
-                seeds.push(seed);
-        }
-
+        var seed = 0;
         var mask = null;
         var unMasked = null;
 
         if (activelyVaryingId != null) {
-            mask = generationData[activelyVaryingId.toString()].mask;
-            unMasked = generationData[activelyVaryingId.toString()].unMasked;
+            var savedData = generationData[activelyVaryingId.toString()];
+            mask = savedData.mask;
+            unMasked = savedData.unMasked;
+            seed = savedData.seed;
+        }
+        
+        seeds = []
+        if (seed == 0) {
+            for (var i = 0; i < numImgs; i++) 
+                seeds.push(Math.floor(Math.random() * 9999999));
+        } else {
+            for (var i = 0; i < numImgs; i++) 
+                seeds.push(seed);
         }
 
         params = { prompt: c(prompt), batch_size: numImgs, seeds: seeds, variance_vector: variance, mask: mask != null ? mask.split(',')[1] : null, un_masked: unMasked != null ? unMasked.split(',')[1] : null };
@@ -564,13 +291,13 @@
         ).fail(
             function (resp, status) {
                 hideLoading();
-                alert('Something went wrong, probably not enough GPU memory. Try smaller resolution and/or fewer images!')
+                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
             }
         ); 
     }
 
     function interpolate() {
-        params = $('#image-grid-elem').children().find('.seed-copy').toArray().map(x => { 
+        params = $('#image-grid-elem').children().find('.variation-icon').toArray().map(x => { 
             var tmp = $(x).data('params');
             var varVec = $(x).data('variance');
             var p = {...tmp};
@@ -586,73 +313,63 @@
         $.post(window.location.href + 'interpolate', data);
     }
 
-    function clearImgElems() {
-        $('#image-grid-elem').empty();
-    }
-
     function addZoomImgToModal($image) {
-        $('.img-and-canvas-container img').remove();
-        $('.img-and-canvas-container .inpainting-icon').remove();
+        var savedData = generationData[$image.attr('generation-id')];
+        var prompt = savedData.params.prompt;
+        $('.img-and-canvas-container').children('img, .inpainting-icon, .clear-mask-icon').remove();
         $zoomImg = $image.clone().removeClass().addClass('zoom-img');
         $('.img-and-canvas-container').append($zoomImg);
+        $('.modal-prompt-label').html(prompt == ' ' ? '&nbsp;' : d(prompt));
         addInpaintingIcons($image);
     }
 
     function addImgElems(data, params, mask, unMasked) {
+        params.mask = null;
+        params.unMasked = null;
+        params.variance_vector = null;        
         imgs = data.imgs;
         variances = data.new_variances;
         var imgElems = [];
         var idx = 0;
-        params.mask = null;
-        params.unMasked = null;
-        params.variance_vector = null;
-        for (var img of imgs) {
-            var savedData = {}
 
-            var $imgContainer = $('<div class="col-4 grid-cell"></div>');
+        for (var img of imgs) {
+            var savedData = {
+                seed: params.seeds[idx],
+                params: params,
+                variance: variances[idx],
+            };
+            var $imgContainer = $('<div class="col-4 image-cell"></div>');
             i = new Image();
             i.onload = function() {
-                if (i.width > i.height) {
+                if (i.width > i.height)
                     $(this).addClass('horizontal-img');
-                } else {
+                else
                     $(this).addClass('vertical-img');
-                }
             };
             i.src = 'data:image/png;base64, ' + img;
             var $imgElem = $(i);
             $imgElem.attr('generation-id', generationId);
-            var $close = $('<span class="close-cross" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
-                '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-regular fa-circle-xmark"></i></span>');
-            var $seedCopy = $('<span class="seed-copy" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations">' + 
-                '<i class="x-mark-bg fa-solid fa-circle"></i><i class="x-mark-fg fa-solid fa-eye-dropper"></i></span>');
-
-            $close.tooltip();
-            $seedCopy.tooltip();
-            savedData.seed = params.seeds[idx];
-            savedData.params = params;
-            savedData.variance = variances[idx];
-            $seedCopy.attr('generation-id', generationId);            
-            // $seedCopy.attr('seed', params.seeds[idx]);
-            // $seedCopy.data('params', params);
-            // $seedCopy.data('variance', variances[idx]);
-            $imgContainer.attr('generation-id', generationId); 
-            $imgContainer.append($imgElem);    
-            $imgContainer.append($close);
-            $imgContainer.append($seedCopy); 
+            var $closeIcon = createCloseIcon();
+            var $variationIcon = createVariationIcon();
+            $variationIcon.attr('generation-id', generationId);
+            $imgContainer.attr('generation-id', generationId);
+            $imgContainer.append($imgElem);
+            $imgContainer.append($closeIcon);
+            $imgContainer.append($variationIcon);
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
                 addZoomImgToModal($image);     
                 $('#img-modal').modal('show');
             });
-            $close.click(function (e) {
+            $closeIcon.click(function (e) {
                 e.stopPropagation();
-                $(this).tooltip('hide')                                                   
+                $(this).tooltip('hide');
                 $(this).parent().fadeOut(200, function() {
                     $(this).remove();
                     indexImgs();
                 });
             });
-            $seedCopy.click(function (e) {
+            $variationIcon.click(function (e) {
                 e.stopPropagation();
                 var savedData = generationData[$(this).attr('generation-id')];
                 var params = savedData.params;
@@ -661,7 +378,6 @@
                 variance = savedData.variance;
                 $(this).parent().addClass('active-variance');
                 activelyVaryingId = Number($(this).attr('generation-id'));
-                globalSeed = seed;
                 $('#prompt-input').val(d(params.prompt));
                 $('#width-slider').val(params.W).trigger('input');
                 $('#height-slider').val(params.H).trigger('input');
@@ -669,7 +385,6 @@
                 $('#scale-slider').val(params.scale).trigger('input'); 
                 $('#variation-group').fadeIn(200);
             });
-
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
@@ -700,46 +415,26 @@
         })
     }
 
-    function createSlider(options) {
-        var defaultVal = options.defaultVal;
-        var name = options.name;
-        var id = options.id;
-        var minVal = options.minVal;
-        var maxVal = options.maxVal;
-        var valDisplayId = id + '-val';
-        var quantizeVal = options.quantizeVal;
+    function createSlider(o) {
+        var valDisplayId = o.id + '-val';
+        if (o.defaultVal == null)
+            o.defaultVal = (o.minVal + o.maxVal) / 2;
 
-        if (defaultVal == null)
-            defaultVal = (minVal + maxVal) / 2;
-
-        var groupElem = '<div class="slider-group"></div>';
-        var labelElem = '<div class="slider-title">' + name + ':</div>';
-        var valDisplayElem = '<div id="' + valDisplayId + '" class="slider-val">' + defaultVal + (options.units ? ' ' + options.units : '') + '</div>';
-        var sliderElem = '<input id="' + id + '" type="range" min="' + minVal + '" max="' + maxVal + '" value="' + defaultVal + '" class="slider" id="width-slider" step="' + quantizeVal + '"">';
-
-        $groupElem = $(groupElem);
-        $labelElem = $(labelElem);
-        $valDisplayElem = $(valDisplayElem);
-        $sliderElem = $(sliderElem);
+        var $groupElem = $('<div class="slider-group"></div>');
+        var $labelElem = $('<div class="slider-title">' + o.name + ':</div>');
+        var $valDisplayElem = $('<div id="' + valDisplayId + '" class="slider-val">' + o.defaultVal + (o.units ? ' ' + o.units : '') + '</div>');
+        var $sliderElem = $('<input id="' + o.id + '" type="range" min="' + o.minVal + '" max="' + o.maxVal + '" value="' + o.defaultVal + '" class="slider" id="width-slider" step="' + o.quantizeVal + '"">');
 
         $sliderElem.on('input', function () {
-            // var val = $(this).val();
-            // val = Math.round(val / quantizeVal);
-            // val *= quantizeVal;
-            // $(this).val(val);
-            $('#' + valDisplayId).html($(this).val() + (options.units ? ' ' + options.units : ''));
+            $('#' + valDisplayId).html($(this).val() + (o.units ? ' ' + o.units : ''));
         })
 
-        $groupElem.append($labelElem);
-        $groupElem.append($valDisplayElem);
-        $groupElem.append($sliderElem);
-
+        $groupElem.append($labelElem, $valDisplayElem, $sliderElem);
         return $groupElem;
     }
 
     function displayLoading() {
         $('#generate-button').prop("disabled", true);
-        // $('#prompt-input').prop("disabled", true);
         $('#button-default-content').hide();
         $('#button-loading-content').show();
         loading = true;
@@ -747,7 +442,6 @@
 
     function hideLoading() {
         $('#generate-button').prop("disabled", false);
-        // $('#prompt-input').prop("disabled", false);
         $('#button-loading-content').hide();
         $('#button-default-content').show();
         loading = false
@@ -762,37 +456,80 @@
 
     function clearVariance() {
         $('#variation-group').fadeOut(200);
-        // $('#variance-scale-slider').val(0);
         activelyVaryingId = null;
-        globalSeed = 0;
-        $('.grid-cell').removeClass('active-variance');
-
+        $('.image-cell').removeClass('active-variance');
         variance = null;
     }
 
     function saveBase64AsFile(base64, fileName) {
         var link = document.createElement("a");
-
         document.body.appendChild(link);
-
         link.setAttribute("href", base64);
         link.setAttribute("download", fileName);
         link.click();
+    }    
+
+    function hasNoMaskIcon(generationId) {
+        return $('.image-cell[generation-id=' + generationId + '] .mask-icon').length == 0;
     }
 
-    window.addEventListener('load', ()=>{
-        // resize();
-        document.addEventListener('mousedown', startPainting);
-        document.addEventListener('mouseup', stopPainting);
-        document.addEventListener('mousemove', sketch);
-        // window.addEventListener('resize', resize);    
-    });
+    function addInpaintingIcons($image) {
+        var $inpaintingIcon = createInpaintingIcon();
+        var $clearMaskIcon = createClearMaskIcon();
 
-    const canvas = document.querySelector('#canvas');
-    const ctx = canvas.getContext('2d');
-    let coord = {x:0 , y:0}; 
-    let paint = false;
-    let canvasOpen = false;
+        $inpaintingIcon.click(function (e) {
+            e.stopPropagation();
+            if (!canvasOpen)
+                openCanvas($image);
+            else
+                closeCanvas();
+        });
+
+        $clearMaskIcon.click(function (e) { e.stopPropagation(); clearCanvas(); });
+        $inpaintingIcon.on('mousedown mouseup', function (e) { e.stopPropagation(); });
+        $clearMaskIcon.on('mousedown mouseup', function (e) { e.stopPropagation(); });        
+        $('.img-and-canvas-container').append($inpaintingIcon, $clearMaskIcon);
+    }
+
+    function createMaskIcon() {
+        return $('<span class="mask-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
+            '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
+    }
+
+    function createInpaintingIcon() {
+        return $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
+            '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
+    }
+
+    function createClearMaskIcon() {
+        return $('<span style="display: none;" class="clear-mask-icon image-icon icon-bottom icon-left" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
+            '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-trash-can"></i></span>');
+    }
+    
+    function createCloseIcon() {
+        return $('<span class="image-icon icon-left icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
+                '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>');
+    }
+
+    function createVariationIcon() {
+        return $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations">' + 
+                '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-eye-dropper"></i></span>');
+    }
+
+    function addMaskIcon(generationId) {
+        var $maskIcon = createMaskIcon();
+        $('.image-cell[generation-id=' + generationId + ']').append($maskIcon);
+    }
+
+    function removeMaskIcon(generationId) {
+        $('.image-cell[generation-id=' + generationId + '] .mask-icon').remove();
+    }
+
+    function isCanvasBlank(canvas) {
+        return !canvas.getContext('2d')
+            .getImageData(0, 0, canvas.width, canvas.height).data
+            .some(channel => channel !== 0);
+    }
 
     function openCanvas($image) {
         var savedData = generationData[$image.attr('generation-id')];
@@ -813,77 +550,12 @@
         $('canvas').show();
         undoStack = [];
         canvasOpen = true;
-    }
-
-    function hasNoMaskIcon(generationId) {
-        return $('.grid-cell[generation-id=' + generationId + '] .mask-icon').length == 0;
-    }
-
-    function addInpaintingIcons($image) {
-        var $inpaintingIcon = createInpaintingIcon();
-        var $clearMaskIcon = createClearMaskIcon();
-
-        $inpaintingIcon.click(function (event) {
-            event.stopPropagation();
-            if (!canvasOpen)
-                openCanvas($image);
-            else
-                closeCanvas();
-        });
-
-        $clearMaskIcon.click(function (event) {
-            event.stopPropagation();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        });
-
-        $inpaintingIcon.mousedown(function (event) {
-            event.stopPropagation();
-        });
-        $inpaintingIcon.mouseup(function (event) {
-            event.stopPropagation();
-        });
-        $clearMaskIcon.mousedown(function (event) {
-            event.stopPropagation();
-        });
-        $clearMaskIcon.mouseup(function (event) {
-            event.stopPropagation();
-        });        
-
-        $('.img-and-canvas-container').append($inpaintingIcon);
-        $('.img-and-canvas-container').append($clearMaskIcon);
-    }
-
-    function addMaskIcon(generationId) {
-        var $maskIcon = createMaskIcon();
-        $('.grid-cell[generation-id=' + generationId + ']').append($maskIcon);
-    }
-
-    function removeMaskIcon(generationId) {
-        $('.grid-cell[generation-id=' + generationId + '] .mask-icon').remove();
     }    
 
-    function createMaskIcon() {
-        return $('<span class="mask-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
-            '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-solid fa-mask"></i></span>');
-    }
-    
-    function createInpaintingIcon() {
-        return $('<span class="inpainting-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
-            '<i class="x-mark-bg fa-solid fa-circle-xmark"></i><i class="x-mark-fg fa-solid fa-mask"></i></span>');
-    }             
-
-    function createClearMaskIcon() {
-        return $('<span style="display: none;"class="clear-mask-icon" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
-            '<i class="x-mark-fg fa-solid fa-trash-can"></i></span>');
-    }              
-    
-    function isCanvasBlank(canvas) {
-        return !canvas.getContext('2d')
-            .getImageData(0, 0, canvas.width, canvas.height).data
-            .some(channel => channel !== 0);
-    }
-
     function closeCanvas() {
+        if (!canvasOpen)
+            return;
+
         canvasOpen = false;
         paint = false;
         $canvas = $('canvas');
@@ -903,22 +575,23 @@
         
         $('.clear-mask-icon').hide();
         $canvas.hide();
+        clearCanvas();
+    }
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);        
     }
 
     function getPosition(event) {
         if (!canvasOpen)
             return;
 
-        let wFactor = canvas.width / $(canvas).width();
-        let hFactor = canvas.height / $(canvas).height();
+        var wFactor = canvas.width / $(canvas).width();
+        var hFactor = canvas.height / $(canvas).height();
         coord.x = (event.clientX - $(canvas).parent().offset().left) * wFactor;
         coord.y = (event.clientY - $(canvas).parent().offset().top + $(window).scrollTop()) * hFactor;
-    }
+    }    
 
-    $(canvas).click(function (event) {
-        event.stopPropagation();
-    });
-    
     function startPainting(event) {
         if (event.button == 0)
             ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
@@ -949,12 +622,12 @@
 
         var undoImg = new Image();
             undoImg.onload = function() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                clearCanvas();
                 ctx.drawImage(undoImg, 0, 0);
             };
         undoImg.src = undoStack.pop();
     }
-        
+
     function sketch(event){
         if (!canvasOpen || !paint)
             return;
@@ -966,11 +639,5 @@
         getPosition(event);
         ctx.lineTo(coord.x , coord.y);
         ctx.stroke();
-    }    
-
-    $('#img-modal').on('hidden.bs.modal', function () {
-        closeCanvas();
-    });
-
-    undoStack = [];
+    }
 </script>

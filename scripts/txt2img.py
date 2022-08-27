@@ -9,7 +9,7 @@ import imp
 import base64
 from io import BytesIO
 from . import GR
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter
 from tqdm import tqdm, trange
 from itertools import islice
 from einops import rearrange, repeat
@@ -54,16 +54,14 @@ def txt2img(request_obj, model, device):
     np.set_printoptions(threshold=sys.maxsize)
     if request_obj.mask is not None:
         mask_img = Image.open(BytesIO(base64.b64decode(request_obj.mask))).convert("RGBA").split()[-1]
-        # print(mask_img)
+        mask_img = mask_img.filter(ImageFilter.GaussianBlur(2))
         un_masked_img = Image.open(BytesIO(base64.b64decode(request_obj.un_masked))).convert("RGB")
         mask_img = mask_img.resize((GR.GR.W//GR.GR.f, GR.GR.H//GR.GR.f), resample=Image.LANCZOS)                
         mask = np.array(mask_img).astype(np.float32) / 255.0
         un_masked = np.array(un_masked_img).astype(np.float32) / 255.0
 
         mask = mask[None,None]
-        mask[mask > 0.0] = 0.2
-        mask[mask == 0.0] = 1.0
-        mask[mask == 0.2] = 0.0
+        mask = 1.0 - mask
 
         un_masked = un_masked[None].transpose(0, 3, 1, 2)
         mask = torch.from_numpy(mask).to(device)

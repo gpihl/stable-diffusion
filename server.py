@@ -14,6 +14,7 @@ from omegaconf import OmegaConf
 import torch
 from ldm.util import instantiate_from_config
 import traceback
+import subprocess
 
 class Payload(object):
     def __init__(self, j):
@@ -63,16 +64,16 @@ def load_model_from_config(config, ckpt, verbose=False):
 def d(prompt):
     res = ''
     for c in prompt:
-        if not c.isalpha():
+        if ord(c) < 65 or ord(c) > 122:
             res += c
             continue
             
-        ascii_val = ord(c) - 97
-        new_ascii_val = ascii_val - 10
+        ascii_val = ord(c) - 65
+        new_ascii_val = ascii_val - 20
         if new_ascii_val < 0:
-            new_ascii_val += 26
+            new_ascii_val += 58
 
-        new_c = chr(new_ascii_val + 97)
+        new_c = chr(new_ascii_val + 65)
         res += new_c
     return res
 
@@ -125,6 +126,9 @@ class S(BaseHTTPRequestHandler):
         data.prompt = d(data.prompt)
 
         images, new_variances = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
+        images[0].save('ESRGAN/tmp.png')
+        process = subprocess.Popen('./ESRGAN/realesrgan-ncnn-vulkan -i tmp.png -o output.png', shell=True, stdout=subprocess.PIPE)
+        process.wait()
         resp.imgs = base64images(images)
         resp.new_variances = new_variances
 
