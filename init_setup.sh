@@ -1,7 +1,7 @@
 #!/bin/bash
 conda env create --prefix /workspace/stable-diffusion/envs -f environment.yaml &&
 mkdir -p models/ldm/stable-diffusion-v1/ &&
-mv /weights/model.ckpt /workspace/stable-diffusion/models/ldm/stable-diffusion-v1/model.ckpt &&
+mv /weights/sd.ckpt /workspace/stable-diffusion/models/ldm/stable-diffusion-v1/model.ckpt &&
 conda init bash &&
 . /root/.bashrc &&
 conda activate /workspace/stable-diffusion/envs &&
