@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
 import sys
 import base64
 import json
+import gzip
+import scripts.txt2img
+import imp
+import torch
+import traceback
+from io import BytesIO
 from time import sleep
 from PIL import Image
 from io import BytesIO
 from urllib.parse import parse_qs
-import scripts.txt2img
-import imp
 from omegaconf import OmegaConf
-import torch
 from ldm.util import instantiate_from_config
-import traceback
-import subprocess
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 class Payload(object):
     def __init__(self, j):
@@ -82,12 +83,13 @@ class S(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", "application/json")
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header("Content-Encoding", "gzip")
         self.end_headers()
     
     def _set_get_response(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
-        self.end_headers()        
+        self.end_headers()
 
     def do_GET(self):
         self._set_get_response()
@@ -96,7 +98,7 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/inpaint':
+            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale':
                 return                
 
             if self.server.lock:
@@ -114,6 +116,8 @@ class S(BaseHTTPRequestHandler):
                 self.interpolate_video(data)
             elif self.path == '/generate':
                 self.generate_pictures(data)
+            elif self.path == '/upscale':
+                self.upscale_img(data)
 
             self.server.lock = False
    
@@ -126,14 +130,19 @@ class S(BaseHTTPRequestHandler):
         data.prompt = d(data.prompt)
 
         images, new_variances = scripts.txt2img.txt2img(data, self.server.model, self.server.device)
-        images[0].save('ESRGAN/tmp.png')
-        process = subprocess.Popen('./ESRGAN/realesrgan-ncnn-vulkan -i tmp.png -o output.png', shell=True, stdout=subprocess.PIPE)
-        process.wait()
         resp.imgs = base64images(images)
         resp.new_variances = new_variances
-
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
         self._set_post_response()
-        self.wfile.write(resp.toJSON().encode('utf-8'))
+        self.wfile.write(resp)
+
+    def upscale_img(self, data):
+        resp = GenerationResponse()        
+        images = scripts.txt2img.upscale(data)
+        resp.imgs = base64images(images)
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
+        self._set_post_response()
+        self.wfile.write(resp)        
 
     def interpolate_video(self, data):
         for d in data:
@@ -148,12 +157,17 @@ def base64images(images):
     for img in images:
         buffered = BytesIO()
         img.save(buffered, 'png')
-        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8') + ';'
         imgs.append(img_str)
 
     return imgs
 
-
+def gzipencode(content):
+    out = BytesIO()
+    f = gzip.GzipFile(fileobj=out, mode='w', compresslevel=5)
+    f.write(content)
+    f.close()
+    return out.getvalue()
 
 def run(server_class=HTTPServer, handler_class=S, port=8080):
     server_address = ('', port)

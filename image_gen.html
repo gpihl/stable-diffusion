@@ -240,6 +240,27 @@
         return res;
     }    
 
+    function upscale(genId) {
+        savedData = generationData[genId];
+        params = savedData.params;
+        base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
+        params.image = base64img;
+
+        displayLoading();
+        $.post(window.location.href + 'upscale', JSON.stringify(params))
+        .done(
+            function (resp, status) {
+                addImgElems(resp, params, null, null, true);
+                hideLoading();
+            }
+        ).fail(
+            function (resp, status) {
+                hideLoading();
+                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
+            }
+        );         
+    }
+
     function generate() {
         if (loading)
             return;
@@ -320,10 +341,11 @@
         $zoomImg = $image.clone().removeClass().addClass('zoom-img');
         $('.img-and-canvas-container').append($zoomImg);
         $('.modal-prompt-label').html(prompt == ' ' ? '&nbsp;' : d(prompt));
-        addInpaintingIcons($image);
+        if (!savedData.upscaled)
+            addInpaintingIcons($image);
     }
 
-    function addImgElems(data, params, mask, unMasked) {
+    function addImgElems(data, params, mask, unMasked, upscaled = false) {
         params.mask = null;
         params.unMasked = null;
         params.variance_vector = null;        
@@ -346,16 +368,23 @@
                 else
                     $(this).addClass('vertical-img');
             };
-            i.src = 'data:image/png;base64, ' + img;
+            i.src = 'data:image/png;base64, ' + img.slice(0, -1);
             var $imgElem = $(i);
             $imgElem.attr('generation-id', generationId);
             var $closeIcon = createCloseIcon();
             var $variationIcon = createVariationIcon();
+            var $upscaleIcon = createUpscaleIcon();
             $variationIcon.attr('generation-id', generationId);
             $imgContainer.attr('generation-id', generationId);
+            $upscaleIcon.attr('generation-id', generationId);
             $imgContainer.append($imgElem);
             $imgContainer.append($closeIcon);
-            $imgContainer.append($variationIcon);
+
+            if (!upscaled) {
+                $imgContainer.append($variationIcon);
+                $imgContainer.append($upscaleIcon);                
+            }
+
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
                 addZoomImgToModal($image);     
@@ -363,12 +392,15 @@
             });
             $closeIcon.click(function (e) {
                 e.stopPropagation();
-                $(this).tooltip('hide');
                 $(this).parent().fadeOut(200, function() {
                     $(this).remove();
                     indexImgs();
                 });
             });
+            $upscaleIcon.click(function (e) {
+                e.stopPropagation();
+                upscale($(this).attr('generation-id'));
+            })
             $variationIcon.click(function (e) {
                 e.stopPropagation();
                 var savedData = generationData[$(this).attr('generation-id')];
@@ -394,8 +426,9 @@
                 savedData.unMasked = unMasked;
                 addMaskIcon(generationId);
             }
+            savedData.upscaled = upscaled;
             generationData[generationId.toString()] = savedData;
-            generationId++;            
+            generationId++;
         }
         
         indexImgs();
@@ -503,7 +536,7 @@
 
     function createClearMaskIcon() {
         return $('<span style="display: none;" class="clear-mask-icon image-icon icon-bottom icon-left" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
-            '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-trash-can"></i></span>');
+            '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-trash-can" style="left: 1px;"></i></span>');
     }
     
     function createCloseIcon() {
@@ -515,6 +548,11 @@
         return $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-eye-dropper"></i></span>');
     }
+
+    function createUpscaleIcon() {
+        return $('<span class="upscale-icon image-icon icon-left icon-bottom" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Upscale image">' + 
+                '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-arrow-up" style="left: 2.5px;"></i></span>');
+    }    
 
     function addMaskIcon(generationId) {
         var $maskIcon = createMaskIcon();

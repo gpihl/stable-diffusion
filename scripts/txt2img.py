@@ -1,4 +1,4 @@
-import os, sys, glob
+import os, sys, glob, gc
 import numpy as np
 import time
 import torch
@@ -7,6 +7,7 @@ import random
 import math
 import imp
 import base64
+import subprocess
 from io import BytesIO
 from . import GR
 from PIL import Image, ImageOps, ImageFilter
@@ -34,6 +35,18 @@ def unflatten(l, n):
         res.append(t[:n])
         t = t[n:]  
     return res    
+
+def upscale(request_obj):
+    image = Image.open(BytesIO(base64.b64decode(request_obj.image))).convert("RGB")
+    image.save('Real-ESRGAN/tmp.png')
+    process = subprocess.Popen('cd Real-ESRGAN && python inference_realesrgan.py -n RealESRGAN_x4plus -i tmp.png --face_enhance && rm tmp.png', shell=True, stdout=subprocess.PIPE)
+    process.wait()
+    image = Image.open('Real-ESRGAN/results/tmp_out.png').convert("RGB")
+    process = subprocess.Popen('rm Real-ESRGAN/results/tmp_out.png', shell=True, stdout=subprocess.PIPE)
+    process.wait()
+    gc.collect()
+    torch.cuda.empty_cache()
+    return [image]
 
 def txt2img(request_obj, model, device):
     imp.reload(GR)
@@ -99,6 +112,8 @@ def txt2img(request_obj, model, device):
                     images.append(Image.fromarray(x_sample.astype(np.uint8)))
 
     print('finished images')    
+    gc.collect()
+    torch.cuda.empty_cache()    
     return images, GR.GR.get_new_variance_vectors(grs)
 
 def interpolate_prompts(request_objs, model, device):
