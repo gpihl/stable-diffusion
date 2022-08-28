@@ -98,7 +98,7 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale':
+            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale' and self.path != '/outpaint':
                 return                
 
             if self.server.lock:
@@ -118,6 +118,8 @@ class S(BaseHTTPRequestHandler):
                 self.generate_pictures(data)
             elif self.path == '/upscale':
                 self.upscale_img(data)
+            elif self.path == '/outpaint':
+                self.outpaint_img(data)                
 
             self.server.lock = False
    
@@ -142,7 +144,19 @@ class S(BaseHTTPRequestHandler):
         resp.imgs = base64images(images)
         resp = gzipencode(resp.toJSON().encode('utf-8'))
         self._set_post_response()
-        self.wfile.write(resp)        
+        self.wfile.write(resp)
+
+    def outpaint_img(self, data):
+        resp = GenerationResponse()
+        data.prompt = d(data.prompt)
+
+        images, new_variances, mask = scripts.txt2img.outpaint(data, self.server.model, self.server.device)
+        resp.imgs = base64images(images)
+        resp.mask = mask
+        resp.new_variances = new_variances
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
+        self._set_post_response()
+        self.wfile.write(resp)
 
     def interpolate_video(self, data):
         for d in data:

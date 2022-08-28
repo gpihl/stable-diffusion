@@ -256,9 +256,43 @@
         ).fail(
             function (resp, status) {
                 hideLoading();
-                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
+                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
             }
         );         
+    }
+
+    function outpaint(genId, dir, amount) {
+        savedData = generationData[genId];
+        params = savedData.params;
+        base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
+        params.image = base64img;
+        params.dir = dir;
+        params.amount = amount;
+        var H = Number(params.H);
+        var W = Number(params.W)
+
+        if (dir == 'up' || dir == 'down')
+            H += amount;
+        else if (dir == 'left' || dir == 'right')
+            W += amount;
+
+        params = { ...savedData.params };
+        params.H = H;
+        params.W = W;
+        params.batch_size = 1;
+        displayLoading();
+        $.post(window.location.href + 'outpaint', JSON.stringify(params))
+        .done(
+            function (resp, status) {
+                addImgElems(resp, params, 'data:image/png;base64, ' + resp.mask, 'data:image/png;base64, ' + resp.imgs[0]);
+                hideLoading();
+            }
+        ).fail(
+            function (resp, status) {
+                hideLoading();
+                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
+            }
+        );
     }
 
     function generate() {
@@ -377,6 +411,7 @@
             $variationIcon.attr('generation-id', generationId);
             $imgContainer.attr('generation-id', generationId);
             $upscaleIcon.attr('generation-id', generationId);
+            $closeIcon.attr('generation-id', generationId);
             $imgContainer.append($imgElem);
             $imgContainer.append($closeIcon);
 
@@ -396,6 +431,7 @@
                     $(this).remove();
                     indexImgs();
                 });
+                delete generationData[$(this).attr('generation-id')];
             });
             $upscaleIcon.click(function (e) {
                 e.stopPropagation();

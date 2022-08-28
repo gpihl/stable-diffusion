@@ -34,9 +34,11 @@ def unflatten(l, n):
     while len(t) > 0:
         res.append(t[:n])
         t = t[n:]  
-    return res    
+    return res
 
 def upscale(request_obj):
+    gc.collect()
+    torch.cuda.empty_cache()
     image = Image.open(BytesIO(base64.b64decode(request_obj.image))).convert("RGB")
     image.save('Real-ESRGAN/tmp.png')
     process = subprocess.Popen('cd Real-ESRGAN && python inference_realesrgan.py -n RealESRGAN_x4plus -i tmp.png --face_enhance && rm tmp.png', shell=True, stdout=subprocess.PIPE)
@@ -48,7 +50,79 @@ def upscale(request_obj):
     torch.cuda.empty_cache()
     return [image]
 
+def outpaint(request_obj, model, device):
+    gc.collect()
+    torch.cuda.empty_cache()    
+    amount = request_obj.amount
+    img = request_obj.image
+    direction = request_obj.dir
+    mask_buffer = 64
+
+    image = Image.open(BytesIO(base64.b64decode(img))).convert("RGB")
+
+    new_size = (image.size[0] + amount, image.size[1])
+    if direction == 'up' or direction == 'down':
+        new_size = (image.size[0], image.size[1] + amount)
+
+    new_img = Image.new('RGB', new_size)
+    mask = Image.new('RGBA', new_size, (0,0,0,0))
+
+    orig_mask_paste_x = 0
+    orig_mask_paste_y = 0
+    orig_paste_x = 0
+    orig_paste_y = 0
+    orig_apnd_img_w = image.size[0]
+    orig_apnd_img_h = amount
+
+    mask_mask_paste_x = 0
+    mask_mask_paste_y = 0
+    mask_apnd_img_w = image.size[0]
+    mask_apnd_img_h = amount + mask_buffer
+
+    if direction == 'right' or direction == 'left':
+        orig_apnd_img_w = amount
+        orig_apnd_img_h = image.size[1]
+        mask_apnd_img_w = amount + mask_buffer
+        mask_apnd_img_h = image.size[1]
+
+    if direction == 'right':
+        orig_mask_paste_x = image.size[0]
+        mask_mask_paste_x = image.size[0] - mask_buffer
+
+    if direction == 'down':
+        orig_mask_paste_y = image.size[1]
+        mask_mask_paste_y = image.size[1] - mask_buffer
+
+    if direction == 'left':
+        orig_paste_x = amount
+
+    if direction == 'up':
+        orig_paste_y = amount
+
+    
+    mask.paste(Image.new('RGBA', (mask_apnd_img_w, mask_apnd_img_h), (0,0,0,255)), (mask_mask_paste_x, mask_mask_paste_y))
+    new_img.paste(Image.new('RGB', (orig_apnd_img_w, orig_apnd_img_h), (0,0,0)), (orig_mask_paste_x, orig_mask_paste_y))
+    new_img.paste(image, (orig_paste_x, orig_paste_y))
+
+    buffered = BytesIO()
+    mask.save(buffered, 'png')
+    mask_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    buffered = BytesIO()
+    new_img.save(buffered, 'png')
+    new_img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    request_obj.mask = mask_str
+    request_obj.un_masked = new_img_str
+
+    images, new_variances = txt2img(request_obj, model, device)
+
+    return images, new_variances, mask_str
+
+
 def txt2img(request_obj, model, device):
+    gc.collect()
+    torch.cuda.empty_cache()    
     imp.reload(GR)
     print('starting to generate images')
     grs = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)
@@ -85,8 +159,6 @@ def txt2img(request_obj, model, device):
         x0 = model.get_first_stage_encoding(model.encode_first_stage(un_masked))  # move to latent space        
         mask = repeat(mask, '1 ... -> b ...', b=batch_size)
 
-
-    
     precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext
     with torch.no_grad():
         with precision_scope("cuda"):
