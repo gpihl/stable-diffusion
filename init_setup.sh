@@ -9,4 +9,4 @@ echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIImiY+UKS6pJpQIC/Og261HwIZ9eQytmMj/vuo
 apt update &&
 apt install nano &&
 git config --global user.email "g@g.g" &&
-git config --global user.name "gpihl" &&
+git config --global user.name "gpihl"
