@@ -247,6 +247,9 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
                         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                         video_out.append_data(x_sample)
 
+                    gc.collect()
+                    torch.cuda.empty_cache()    
+
     print('finished video')
     video_out.close()
     video = open(filename, "rb")
