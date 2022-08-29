@@ -29,6 +29,7 @@ class GenerationResponse():
     def __init__(self):
         self.imgs = []
         self.new_variances = []
+        self.video = None
 
     def toJSON(self):
         return json.dumps(self, default=lambda o: o.__dict__, 
@@ -79,9 +80,9 @@ def d(prompt):
     return res
 
 class S(BaseHTTPRequestHandler):
-    def _set_post_response(self):
+    def _set_post_response(self, content_type):
         self.send_response(200)
-        self.send_header("Content-type", "application/json")
+        self.send_header("Content-type", content_type)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header("Content-Encoding", "gzip")
         self.end_headers()
@@ -135,7 +136,7 @@ class S(BaseHTTPRequestHandler):
         resp.imgs = base64images(images)
         resp.new_variances = new_variances
         resp = gzipencode(resp.toJSON().encode('utf-8'))
-        self._set_post_response()
+        self._set_post_response("application/json")
         self.wfile.write(resp)
 
     def upscale_img(self, data):
@@ -143,7 +144,7 @@ class S(BaseHTTPRequestHandler):
         images = scripts.txt2img.upscale(data)
         resp.imgs = base64images(images)
         resp = gzipencode(resp.toJSON().encode('utf-8'))
-        self._set_post_response()
+        self._set_post_response("application/json")
         self.wfile.write(resp)
 
     def outpaint_img(self, data):
@@ -155,15 +156,20 @@ class S(BaseHTTPRequestHandler):
         resp.mask = mask
         resp.new_variances = new_variances
         resp = gzipencode(resp.toJSON().encode('utf-8'))
-        self._set_post_response()
+        self._set_post_response("application/json")
         self.wfile.write(resp)
 
     def interpolate_video(self, data):
-        for d in data:
-            d.prompt = d(x.prompt)
+        resp = GenerationResponse()
+        for p in data.params:
+            p['prompt'] = d(p['prompt'])
 
-        data = list(map(ObjectFromDict, data))
-        scripts.txt2img.interpolate_prompts(data, self.server.model, self.server.device)
+        request_objs = list(map(ObjectFromDict, data.params))
+        video = scripts.txt2img.interpolate_prompts(request_objs, data.fps, data.degrees_per_second, data.batch_size, self.server.model, self.server.device)
+        #resp.video = video
+        resp = gzipencode(video)
+        self._set_post_response("application/octet-stream")
+        self.wfile.write(resp)
         #TODO, return video to client
 
 def base64images(images):

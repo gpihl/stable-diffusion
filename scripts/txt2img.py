@@ -188,7 +188,7 @@ def txt2img(request_obj, model, device):
     torch.cuda.empty_cache()    
     return images, GR.GR.get_new_variance_vectors(grs)
 
-def interpolate_prompts(request_objs, model, device):
+def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model, device):
     imp.reload(GR)
     print('starting to interpolate')
     grs = []
@@ -199,8 +199,8 @@ def interpolate_prompts(request_objs, model, device):
     start_codes = GR.GR.get_start_codes_batch(grs)
     conditionings = GR.GR.get_conditionings_batch(grs)
 
-    degrees_per_second = 10
-    fps = 25
+    #degrees_per_second = 10
+    #fps = 25
     frames_per_degree = fps / degrees_per_second
 
     steps_seq = GR.GR.get_interpolation_steps_seq(start_codes, conditionings, frames_per_degree)
@@ -213,12 +213,14 @@ def interpolate_prompts(request_objs, model, device):
     scale = grs[0].scale
     ddim_eta = GR.GR.ddim_eta    
     shape = GR.GR.start_code_shape[1:]
-    batch_size = 15
+    #batch_size = 15
     sampler = DDIMSampler(model)
 
     filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
 
     video_out = imageio.get_writer(filename, mode='I', fps=fps, codec='libx264')
+    print(dir(video_out))
+    
     start_codes = unflatten(start_codes, batch_size)
     conditionings = unflatten(conditionings, batch_size)
 
@@ -247,3 +249,7 @@ def interpolate_prompts(request_objs, model, device):
 
     print('finished video')
     video_out.close()
+    video = open(filename, "rb")
+    video = video.read()
+    print(video[0:1000])
+    return video

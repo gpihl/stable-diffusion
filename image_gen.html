@@ -351,12 +351,14 @@
         ); 
     }
 
-    function interpolate() {
-        params = $('#image-grid-elem').children().find('.variation-icon').toArray().map(x => { 
-            var tmp = $(x).data('params');
-            var varVec = $(x).data('variance');
+    function interpolate(fps = 25, degrees_per_second = 10, batch_size = 15) {
+        var params = $('#image-grid-elem').children().find('.variation-icon').toArray().map(x => { 
+            var generationId = $(x).attr('generation-id');
+            var savedData = generationData[generationId];
+            var tmp = savedData.params;
+            var varVec = savedData.variance;
             var p = {...tmp};
-            var s = $(x).attr('seed');
+            var s = savedData.seed;
             p.batch_size = 1;
             p.variance_scale = 0;
             p.variance_vector = varVec;
@@ -364,8 +366,25 @@
             p.seeds = [s];
             return p;
         }).reverse();
-        data = JSON.stringify({ params: params });
-        $.post(window.location.href + 'interpolate', data);
+
+        var data = JSON.stringify({ params: params, fps: fps, batch_size: batch_size, degrees_per_second: degrees_per_second });
+        $.ajax({
+            url: window.location.href + 'interpolate',
+            type: 'POST',
+            data: data,
+            xhrFields: { responseType: 'arraybuffer' },
+            crossDomain: true,
+        })
+        .done(
+            function (resp, status) {
+                saveData(resp, 'interpolation.mp4');
+            }
+        ).fail(
+            function (resp, status) {
+                hideLoading();
+                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
+            }
+        );
     }
 
     function addZoomImgToModal($image) {
@@ -714,4 +733,32 @@
         ctx.lineTo(coord.x , coord.y);
         ctx.stroke();
     }
+
+
+    let url;
+
+    const saveData = (() => {
+        const a = document.createElement('a');
+        a.style = 'display: none';
+        document.body.appendChild(a);
+
+        return (data, fileName, type = 'octet/stream') => {
+            const blob = new Blob([data], { type });
+
+            if (navigator.msSaveBlob) {
+                return navigator.msSaveBlob(blob, fileName);
+            }
+
+            if (url) {
+                // Keep at most 1 blob around by removing the last used one.
+                URL.revokeObjectURL(url);
+            }
+
+            url = URL.createObjectURL(blob);
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            return true;
+        };
+    })();
 </script>
