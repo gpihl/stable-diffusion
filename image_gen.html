@@ -78,7 +78,7 @@
 
         .spinning-logo {
             animation-name: spin;
-            animation-duration: 1000ms;
+            animation-duration: 666ms;
             animation-iteration-count: infinite;
             animation-timing-function: linear; 
             /* transform: rotate(3deg); */
@@ -88,7 +88,8 @@
         }
 
         .paused {
-            animation-play-state: paused;
+            animation-duration: 10000ms;
+            /* animation-play-state: paused; */
         }
 
         @keyframes spin {
@@ -163,6 +164,7 @@
     var generationId = 0;
     var undoStack = [];
     var requestQueue = [];
+    var warningMsg = 'Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!';
     const canvas = document.querySelector('#canvas');
     const ctx = canvas.getContext('2d');
 
@@ -241,8 +243,13 @@
         $('#prompt-input').focus();
     });
 
-    function addRequest(requestType, opts = []) {
+    function addRequest(requestType, opts = []) {        
         var params;
+        $('.logo-img').fadeOut(200, function () {
+            $('.logo-img').removeClass('paused');
+            $('.logo-img').fadeIn(200);
+        })        
+
         if (requestType == 'txt2img' && activelyImgToImgId != null)
             requestType = 'img2img';
 
@@ -254,16 +261,17 @@
             params = getOutpaintRequestParams(...opts);
         } else if (requestType == 'upscale') {
             params = getUpscaleRequestParams(...opts);
+        } else if (requestType == 'sharpen') {
+            params = getSharpenRequestParams(...opts);
         }
 
-        
         var uiLabel = requestType.charAt(0).toUpperCase() + requestType.slice(1);
         if (requestType == 'txt2img')
             uiLabel = d(params.prompt);
             if (uiLabel.length > 15)
                 uiLabel = uiLabel.slice(0, 15).trim() + '...';
 
-        $uiElem = $('<div class="queue-elem">' + uiLabel + '<span class="spinner-border spinner-border-sm ml-2" role="status" aria-hidden="true"></span></div>');
+        $uiElem = $('<div class="queue-elem">- ' + uiLabel + '<span class="spinner-border spinner-border-sm ml-2" role="status" aria-hidden="true"></span></div>');
         $('#request-queue-group').append($uiElem);
         requestQueue.push({ requestType, params, $uiElem });
 
@@ -275,12 +283,14 @@
             return;
         
         if (requestQueue.length == 0) {
-            $('.logo-img').addClass('paused');
+            $('.logo-img').fadeOut(200, function () {
+                $('.logo-img').addClass('paused');
+                $('.logo-img').fadeIn(200);
+            })
             return;
         }
 
         loading = true;
-        $('.logo-img').removeClass('paused');
         var request = requestQueue.shift();
         var requestType = request.requestType;
 
@@ -292,6 +302,8 @@
             outpaint(request);
         } else if (requestType == 'upscale') {
             upscale(request);
+        } else if (requestType == 'sharpen') {
+            sharpen(request);
         }
     }
 
@@ -321,7 +333,7 @@
                 }
             ).fail(
                 function (resp, status) {
-                    alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
+                    alert(warningMsg)
                 }
             ); 
         };
@@ -379,6 +391,15 @@
         return params;
     }
 
+    function getSharpenRequestParams(genId) {
+        var savedData = generationData[genId];
+        var params = { ...savedData.params };
+        var base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
+        params.image = base64img;
+
+        return params;
+    }    
+
     function upscale(request) {
         $.post(window.location.href + 'upscale', JSON.stringify(request.params))
         .done(
@@ -393,10 +414,29 @@
                 loading = false;
                 request.$uiElem.remove();
                 handleRequests();                
-                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
+                alert(warningMsg);
             }
         );         
     }
+
+    function sharpen(request) {
+        $.post(window.location.href + 'sharpen', JSON.stringify(request.params))
+        .done(
+            function (resp, status) {
+                addImgElems(resp, request.params, null, null);
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
+            }
+        ).fail(
+            function (resp, status) {
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();                
+                alert(warningMsg);
+            }
+        );         
+    }    
 
     function getOutpaintRequestParams(genId, dir, amount) {
         var savedData = generationData[genId];
@@ -434,7 +474,7 @@
                 loading = false;
                 request.$uiElem.remove();
                 handleRequests();
-                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
+                alert(warningMsg);
             }
         );
     }
@@ -507,7 +547,7 @@
                 loading = false;
                 request.$uiElem.remove();
                 handleRequests();
-                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
+                alert(warningMsg)
             }
         ); 
     }
@@ -542,7 +582,7 @@
             }
         ).fail(
             function (resp, status) {
-                alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
+                alert(warningMsg);
             }
         );
     }
@@ -618,6 +658,7 @@
                 $imgContainer.append(createOutpaintingIcon('down', generationId));
                 $imgContainer.append(createOutpaintingIcon('left', generationId));
                 $imgContainer.append(createOutpaintingIcon('right', generationId));
+                $imgContainer.append(createSharpenIcon(generationId));
             }
 
             $imgContainer.find('.image-icon').css('display', 'none');
@@ -839,7 +880,7 @@
 
     function createInpaintingIcon() {
         var $icon = $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
-            '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
+            '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-highlighter"></i></span>');
         
         return $icon;            
     }
@@ -871,6 +912,18 @@
         
         return $icon;                
     }    
+
+    function createSharpenIcon(generationId) {
+        var $icon = $('<span class="sharpen-icon image-icon icon-left icon-bottom" style="left: 35px;" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Sharpen image">' + 
+                '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-hand-sparkles" style="left: -2.5px;"></i></span>');
+        
+        $icon.attr('generation-id', generationId);
+        $icon.click(function (e) {
+            e.stopPropagation();
+            addRequest('sharpen', [$(this).attr('generation-id')]);
+        });                
+        return $icon;                
+    }        
 
     function addMaskIcon(generationId) {
         var $maskIcon = createMaskIcon();

@@ -52,6 +52,25 @@ def upscale(request_obj):
     print('finished upscale')   
     return [image]
 
+def sharpen(request_obj):
+    print('starting sharpen')   
+    gc.collect()
+    torch.cuda.empty_cache()
+    image = Image.open(BytesIO(base64.b64decode(request_obj.image))).convert("RGB")
+    original_size = image.size
+
+    image.save('Real-ESRGAN/tmp.png')
+    process = subprocess.Popen('cd Real-ESRGAN && python inference_realesrgan.py -n RealESRGAN_x4plus -i tmp.png --face_enhance && rm tmp.png', shell=True, stdout=subprocess.PIPE)
+    process.wait()
+    image = Image.open('Real-ESRGAN/results/tmp_out.png').convert("RGB")
+    process = subprocess.Popen('rm Real-ESRGAN/results/tmp_out.png', shell=True, stdout=subprocess.PIPE)
+    process.wait()
+    image.thumbnail(original_size, Image.ANTIALIAS)
+    gc.collect()
+    torch.cuda.empty_cache()    
+    print('finished upscale')   
+    return [image]    
+
 def outpaint(request_obj, model, device):
     print('starting outpainting')
     gc.collect()
@@ -129,72 +148,6 @@ def outpaint(request_obj, model, device):
 
     print('finished outpainting')
     return images, new_variances, mask_str        
-
-
-    # new_size = (image.size[0] + amount, image.size[1])
-    # final_size = (image.size[0] + amount, image.size[1] + amount)
-
-    # if direction == 'up' or direction == 'down':
-    #     new_size = (image.size[0], image.size[1] + amount)
-
-    # new_img = Image.new('RGB', new_size)
-    # mask = Image.new('RGBA', new_size, (0,0,0,0))
-
-    # orig_mask_paste_x = 0
-    # orig_mask_paste_y = 0
-    # orig_paste_x = 0
-    # orig_paste_y = 0
-    # orig_apnd_img_w = image.size[0]
-    # orig_apnd_img_h = amount
-
-    # mask_mask_paste_x = 0
-    # mask_mask_paste_y = 0
-    # mask_apnd_img_w = image.size[0]
-    # mask_apnd_img_h = amount + mask_buffer
-
-    # if direction == 'right' or direction == 'left':
-    #     orig_apnd_img_w = amount
-    #     orig_apnd_img_h = image.size[1]
-    #     mask_apnd_img_w = amount + mask_buffer
-    #     mask_apnd_img_h = image.size[1]
-
-    # if direction == 'right':
-    #     orig_mask_paste_x = image.size[0]
-    #     mask_mask_paste_x = image.size[0] - mask_buffer
-
-    # if direction == 'down':
-    #     orig_mask_paste_y = image.size[1]
-    #     mask_mask_paste_y = image.size[1] - mask_buffer
-
-    # if direction == 'left':
-    #     orig_paste_x = amount
-
-    # if direction == 'up':
-    #     orig_paste_y = amount
-
-    
-    # mask.paste(Image.new('RGBA', (mask_apnd_img_w, mask_apnd_img_h), (0,0,0,255)), (mask_mask_paste_x, mask_mask_paste_y))
-    # new_img.paste(Image.new('RGB', (orig_apnd_img_w, orig_apnd_img_h), (0,0,0)), (orig_mask_paste_x, orig_mask_paste_y))
-    # new_img.paste(image, (orig_paste_x, orig_paste_y))
-
-    # final_img = Image.new('RGB', final_size, (0,0,0))
-    # final_mask = Image.new('RGBA', final_size, (0,0,0,255))
-    
-    # if direction == 'right':
-    #     final_paste_x = 0
-    #     final_paste_y = int(amount / 2)
-    # if direction == 'down':
-    #     final_paste_x = int(amount / 2)
-    #     final_paste_y = 0
-    # if direction == 'left':
-    #     final_paste_x = 0
-    #     final_paste_y = int(amount / 2)
-    # if direction == 'up':
-    #     final_paste_x = int(amount / 2)
-    #     final_paste_y = 0
-
-    # print(final_paste_x)
-    # print(final_paste_y)
 
 def imgtoimg(request_obj, model, device):
     print('starting to generate imgtoimg images')
@@ -294,23 +247,31 @@ def txt2img(request_obj, model, device):
     mask = None
     x0 = None
     np.set_printoptions(threshold=sys.maxsize)
+    original_size_mask = None
+
     if request_obj.mask is not None:
         mask_img = Image.open(BytesIO(base64.b64decode(request_obj.mask))).convert("RGBA").split()[-1]
         mask_img = mask_img.filter(ImageFilter.GaussianBlur(4))
-        un_masked_img = Image.open(BytesIO(base64.b64decode(request_obj.un_masked))).convert("RGB")
-        mask_img = mask_img.resize((GR.GR.W//GR.GR.f, GR.GR.H//GR.GR.f), resample=Image.LANCZOS)                
+        original_size_mask_img = mask_img.copy()
+        original_size_mask = np.array(original_size_mask_img).astype(np.float32) / 255.0
+        original_size_mask = original_size_mask[None,None]
+        original_size_mask = 1.0 - original_size_mask
+        original_size_mask = torch.from_numpy(original_size_mask).to(device)
+        original_size_mask = repeat(original_size_mask, '1 1 ... -> b 3 ...', b=batch_size)
+
+        mask_img = mask_img.resize((GR.GR.W//GR.GR.f, GR.GR.H//GR.GR.f), resample=Image.LANCZOS)
         mask = np.array(mask_img).astype(np.float32) / 255.0
-        un_masked = np.array(un_masked_img).astype(np.float32) / 255.0
-
         mask = mask[None,None]
-        mask = 1.0 - mask
-
-        un_masked = un_masked[None].transpose(0, 3, 1, 2)
+        mask = 1.0 - mask        
         mask = torch.from_numpy(mask).to(device)
-        un_masked = torch.from_numpy(un_masked).to(device)
 
+        un_masked_img = Image.open(BytesIO(base64.b64decode(request_obj.un_masked))).convert("RGB")
+        un_masked = np.array(un_masked_img).astype(np.float32) / 255.0
+        un_masked = un_masked[None].transpose(0, 3, 1, 2)
+        un_masked = torch.from_numpy(un_masked).to(device)
         un_masked = 2. * un_masked - 1
         un_masked = repeat(un_masked, '1 ... -> b ...', b=batch_size)
+
         x0 = model.get_first_stage_encoding(model.encode_first_stage(un_masked))  # move to latent space        
         mask = repeat(mask, '1 ... -> b ...', b=batch_size)
 
@@ -334,6 +295,11 @@ def txt2img(request_obj, model, device):
 
                 x_samples_ddim = model.decode_first_stage(samples_ddim)
                 x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+
+                if request_obj.mask is not None:
+                    un_masked = torch.clamp((un_masked + 1.0) / 2.0, min=0.0, max=1.0)
+                    x_samples_ddim = (1. - original_size_mask) * x_samples_ddim + original_size_mask * un_masked
+
                 for x_sample in x_samples_ddim:
                     x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                     images.append(Image.fromarray(x_sample.astype(np.uint8)))

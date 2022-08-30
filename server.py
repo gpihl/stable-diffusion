@@ -100,7 +100,7 @@ class S(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             print('received post to: ' + self.path)
-            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale' and self.path != '/outpaint' and self.path != '/imgtoimg' and self.path != '/uploadimg':
+            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale' and self.path != '/outpaint' and self.path != '/imgtoimg' and self.path != '/uploadimg' and self.path != '/sharpen':
                 return                
 
             if self.server.lock:
@@ -126,6 +126,8 @@ class S(BaseHTTPRequestHandler):
                 self.imgtoimg(data)    
             elif self.path == '/uploadimg':
                 self.upload_img(data)
+            elif self.path == '/sharpen':
+                self.sharpen_img(data)
 
             self.server.lock = False
    
@@ -151,6 +153,14 @@ class S(BaseHTTPRequestHandler):
         resp = gzipencode(resp.toJSON().encode('utf-8'))
         self._set_post_response("application/json")
         self.wfile.write(resp)
+
+    def sharpen_img(self, data):
+        resp = GenerationResponse()        
+        images = scripts.txt2img.sharpen(data)
+        resp.imgs = base64images(images)
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
+        self._set_post_response("application/json")
+        self.wfile.write(resp)        
 
     def imgtoimg(self, data):
         resp = GenerationResponse()
