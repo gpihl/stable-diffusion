@@ -37,6 +37,7 @@ def unflatten(l, n):
     return res
 
 def upscale(request_obj):
+    print('starting upscale')    
     gc.collect()
     torch.cuda.empty_cache()
     image = Image.open(BytesIO(base64.b64decode(request_obj.image))).convert("RGB")
@@ -48,9 +49,11 @@ def upscale(request_obj):
     process.wait()
     gc.collect()
     torch.cuda.empty_cache()
+    print('finished upscale')   
     return [image]
 
 def outpaint(request_obj, model, device):
+    print('starting outpainting')
     gc.collect()
     torch.cuda.empty_cache()    
     amount = request_obj.amount
@@ -115,16 +118,98 @@ def outpaint(request_obj, model, device):
     request_obj.mask = mask_str
     request_obj.un_masked = new_img_str
 
+    if not hasattr(request_obj, 'seeds'):
+        request_obj.seeds = [random.randint(1, 999999)]
+
     images, new_variances = txt2img(request_obj, model, device)
 
+    print('finished outpainting')
     return images, new_variances, mask_str
+
+def imgtoimg(request_obj, model, device):
+    print('starting to generate imgtoimg images')
+    gc.collect()
+    torch.cuda.empty_cache()    
+    imp.reload(GR)
+    
+    grs = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)
+    start_codes = GR.GR.get_start_codes_batch(grs)
+    conditionings = GR.GR.get_conditionings_batch(grs)
+    images = []
+    ddim_steps = grs[0].ddim_steps
+    ddim_eta = grs[0].ddim_eta
+    scale = grs[0].scale
+    shape = GR.GR.start_code_shape[1:]
+    batch_size = len(grs)
+    sampler = DDIMSampler(model)    
+
+    init_img = Image.open(BytesIO(base64.b64decode(request_obj.init_img))).convert("RGB")
+    init_img = np.array(init_img).astype(np.float32) / 255.0
+    init_img = init_img[None].transpose(0, 3, 1, 2)
+    init_img = torch.from_numpy(init_img).to(device)
+    init_img = 2. * init_img - 1
+    init_img = repeat(init_img, '1 ... -> b ...', b=batch_size)
+    init_latent = model.get_first_stage_encoding(model.encode_first_stage(init_img))  # move to latent space
+
+    sampler.make_schedule(ddim_num_steps=ddim_steps, ddim_eta=ddim_eta, verbose=False)
+    t_enc = int(GR.GR.strength * ddim_steps)
+
+    precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext
+    with torch.no_grad():
+        with precision_scope("cuda"):
+            with model.ema_scope():
+                uc = model.get_learned_conditioning(batch_size * [""])
+
+                # encode (scaled latent)
+                z_enc = sampler.stochastic_encode(init_latent, torch.tensor([t_enc]*batch_size).to(device))
+                # decode it
+                samples = sampler.decode(z_enc, conditionings, t_enc, unconditional_guidance_scale=scale,
+                                            unconditional_conditioning=uc,)
+
+                x_samples_ddim = model.decode_first_stage(samples)
+                x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                for x_sample in x_samples_ddim:
+                    x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                    images.append(Image.fromarray(x_sample.astype(np.uint8)))    
+
+    print('finished images')
+    gc.collect()
+    torch.cuda.empty_cache()    
+    return images, GR.GR.get_new_variance_vectors(grs)
+
+def upload_img(img, extension):
+    print('starting uploaded img processing')
+    img = Image.open(BytesIO(base64.b64decode(img))).convert("RGB")
+    w = img.size[0]
+    h = img.size[1]
+    x_offset = 0
+    y_offset = 0
+    cropped_w = w
+    cropped_h = h
+
+    if w > h:
+        x_offset = (w - h) / 2
+        cropped_w = h
+    elif h > w:
+        y_offset = (h - w) / 2
+        cropped_h = w
+
+    img = img.crop((x_offset, y_offset, x_offset + cropped_w, y_offset + cropped_h))
+    
+    if img.size[0] < 512:
+        dim = (math.floor(img.size[0] / 64)) * 64
+        img.thumbnail((dim, dim), Image.ANTIALIAS)
+    else:
+        img.thumbnail((512,512), Image.ANTIALIAS)
+
+    return img
 
 
 def txt2img(request_obj, model, device):
     gc.collect()
     torch.cuda.empty_cache()    
     imp.reload(GR)
-    print('starting to generate images')
+    print('starting to generate txt2img images')
     grs = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)
     start_codes = GR.GR.get_start_codes_batch(grs)
     conditionings = GR.GR.get_conditionings_batch(grs)
@@ -219,7 +304,6 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
 
     video_out = imageio.get_writer(filename, mode='I', fps=fps, codec='libx264')
-    print(dir(video_out))
     
     start_codes = unflatten(start_codes, batch_size)
     conditionings = unflatten(conditionings, batch_size)
@@ -247,12 +331,8 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
                         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                         video_out.append_data(x_sample)
 
-                    gc.collect()
-                    torch.cuda.empty_cache()    
-
     print('finished video')
     video_out.close()
     video = open(filename, "rb")
     video = video.read()
-    print(video[0:1000])
     return video

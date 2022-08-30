@@ -2,12 +2,14 @@ import torch
 import time
 import math
 import re
+import random
 
 class GR:
     C = 4
     f = 8
     precision = 'autocast'
     ddim_eta = 0.0
+    strength = 0.75
     W = None
     H = None    
     model = None
@@ -35,18 +37,22 @@ class GR:
         GR.seeding_func = seeding_func    
         GR.W = int(request_obj.W)
         GR.H = int(request_obj.H)            
-        GR.start_code_shape = [1, GR.C, GR.H // GR.f, GR.W // GR.f] 
+        GR.start_code_shape = [1, GR.C, GR.H // GR.f, GR.W // GR.f]
+        GR.strength = float(request_obj.strength) if hasattr(request_obj, 'strength') else None
 
         #construct generation requests
         for i in range(request_obj.batch_size):
-            seed = int(request_obj.seeds[i])
+            if request_obj.seeds[i] == None:
+                seed = random.randint(1, 9999999)
+            else:
+                seed = int(request_obj.seeds[i])
             gr = GR(request_obj, seed)
             generation_requests.append(gr)
 
         #set and update start code variance
         GR.seeding_func(round(time.time() * 10000000) % 100000)
         for gr in generation_requests:
-            gr.init_start_code_variance(request_obj.variance_vector)
+            gr.init_start_code_variance(request_obj.variance_vector if hasattr(request_obj, 'variance_vector') else None)
             gr.update_start_code_variance()
 
         #set start code and conditioning
@@ -100,7 +106,7 @@ class GR:
         if variance_vector is not None:    
             self.start_code_variance = torch.tensor(list(map(float, variance_vector)), device=GR.device).reshape(*GR.start_code_shape)
         else:
-            self.start_code_variance = torch.zeros(GR.start_code_shape, device=GR.device)
+            self.start_code_variance = torch.zeros(GR.start_code_shape, device=GR.device).reshape(*GR.start_code_shape)
 
     def update_start_code_variance(self):
         new_start_code_variance = self.variance_scale * torch.randn(GR.start_code_shape, device=GR.device)

@@ -99,7 +99,8 @@ class S(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale' and self.path != '/outpaint':
+            print('received post to: ' + self.path)
+            if self.path != '/generate' and self.path != '/interpolate' and self.path != '/upscale' and self.path != '/outpaint' and self.path != '/imgtoimg' and self.path != '/uploadimg':
                 return                
 
             if self.server.lock:
@@ -121,6 +122,10 @@ class S(BaseHTTPRequestHandler):
                 self.upscale_img(data)
             elif self.path == '/outpaint':
                 self.outpaint_img(data)                
+            elif self.path == '/imgtoimg':
+                self.imgtoimg(data)    
+            elif self.path == '/uploadimg':
+                self.upload_img(data)
 
             self.server.lock = False
    
@@ -147,6 +152,17 @@ class S(BaseHTTPRequestHandler):
         self._set_post_response("application/json")
         self.wfile.write(resp)
 
+    def imgtoimg(self, data):
+        resp = GenerationResponse()
+        data.prompt = d(data.prompt)
+
+        images, new_variances = scripts.txt2img.imgtoimg(data, self.server.model, self.server.device)
+        resp.imgs = base64images(images)
+        resp.new_variances = new_variances
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
+        self._set_post_response("application/json")
+        self.wfile.write(resp)        
+
     def outpaint_img(self, data):
         resp = GenerationResponse()
         data.prompt = d(data.prompt)
@@ -170,7 +186,16 @@ class S(BaseHTTPRequestHandler):
         resp = gzipencode(video)
         self._set_post_response("application/octet-stream")
         self.wfile.write(resp)
-        #TODO, return video to client
+
+    def upload_img(self, data):
+        resp = GenerationResponse()
+        img = scripts.txt2img.upload_img(data.img, data.extension)
+        resp.w = img.size[0]
+        resp.h = img.size[1]
+        resp.img = base64images([img])
+        resp = gzipencode(resp.toJSON().encode('utf-8'))
+        self._set_post_response("application/json")
+        self.wfile.write(resp)
 
 def base64images(images):
     imgs = []
@@ -194,6 +219,7 @@ def run(server_class=HTTPServer, handler_class=S, port=8080):
     httpd = server_class(server_address, handler_class)
     httpd.lock = True
     httpd.model, httpd.device = init_model()
+    print('Model loaded, server ready')
     httpd.lock = False
     try:
         httpd.serve_forever()

@@ -12,7 +12,9 @@
         #prompt-input { width: 100%; width: -moz-available; width: -webkit-fill-available; width: fill-available; }
         #generate-button { float: right; width: 130px; color: #c1bbbb; }
         #variation-group { background-color: #532424; border-radius: 7px; margin-top: 14px; padding-bottom: 10px; display: none; position: relative; }
-        #download-button { width: 250px; color: #c1bbbb; }
+        #imgtoimg-group { background-color: #24532a; border-radius: 7px; margin-top: 14px; padding-bottom: 10px; display: none; position: relative; }        
+        #download-button { width: 250px; color: #c1bbbb; background-color: #333333 !important; }
+        #upload-button { width: 250px; color: #c1bbbb; background-color: #333333 !important; }        
 
         body { background-color: #303030; height: 100%; }
         canvas { position: absolute; z-index: 999999; width: -webkit-fill-available; height: calc(100% - 21px); cursor: crosshair; }
@@ -24,6 +26,7 @@
         .noselect { -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
         .logo { color: #777777; font-size: 30px; float: left; }
         .active-variance { border: 9px solid #a93a3a; border-radius: 15px; }
+        .active-imgtoimg { border: 9px solid #47a93a; border-radius: 15px; }        
         .settings-input { height: 25px; text-align: right; margin-top: 6px; }
         .input-bar { z-index: 1000; position: fixed; width: 100%; padding: 9px; background-color: #292525; }
         .control-panel { z-index: 1000; position: fixed; top: 68px; right: 0px; height: 100%; width: 300px; background-color: #2f2a2a; padding: 15px; }
@@ -97,13 +100,20 @@
         <div id="variation-group">
             <span class="image-icon icon-right icon-top" onclick="clearVariance();" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Exit variation mode"><i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>
         </div>
+        <div id="imgtoimg-group">
+            <span class="image-icon icon-right icon-top" onclick="clearVariance();" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Exit variation mode"><i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>
+        </div>        
         <hr/>
         <div class="slider-group" style="text-align: center;">
             <button id="download-button" type="button" class="btn btn-secondary mt-3" onclick="downloadAllImgs();">
                 Save images <i class="fa-solid fa-floppy-disk ml-2"></i>
-            </button>         
-        </div>            
-    </div>    
+            </button>
+            <label id="upload-button" for="upload-input" class="btn btn-secondary mt-2" style="cursor: pointer;">
+                Upload image <i class="fa-solid fa-cloud-arrow-up ml-2"></i>
+            </label>
+            <input id="upload-input" type="file" style="display: none;" onchange="uploadImage(this);">
+        </div>
+    </div>
     <div id="image-grid-elem" class="image-grid row"></div>
 </body>
 
@@ -114,8 +124,10 @@
         { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 30, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
         { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7, sdName: 'scale', quantizeVal: 0.5 },        
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
+        { name: 'Img2Img Depth', id: 'imgtoimg-depth-slider', minVal: 0.0, maxVal: 1.0, defaultVal: 0.75, sdName: 'strength', quantizeVal: 0.05, target: 'imgtoimg-group' },
     ];
     var activelyVaryingId = null;
+    var activelyImgToImgId = null;
     var variance = null;
     var loading = false;
     var coord = {x:0 , y:0};
@@ -199,6 +211,34 @@
             }        
         });
     });
+
+    function uploadImage(fileInput) {
+        var file = fileInput.files[0];
+        var extension = file.name.split('.')[1];
+        var reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function () {
+            var base64img = reader.result.split(',')[1];
+            var data = { img: base64img, extension: extension };
+
+            displayLoading();            
+            $.post(window.location.href + 'uploadimg', JSON.stringify(data))
+            .done(
+                function (resp, status) {
+                    addImgElems({ imgs: resp.img }, { W: resp.w, H: resp.h }, null, null, false, true);
+                    hideLoading();
+                }
+            ).fail(
+                function (resp, status) {
+                    hideLoading();
+                    alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
+                }
+            ); 
+        };
+        reader.onerror = function (error) {
+            console.log('Error: ', error);
+        };
+    }
 
     function isCharacterALetter(char) {
         return char.charCodeAt(0) >= 65 && char.charCodeAt(0) <= 122;
@@ -303,8 +343,6 @@
         if (prompt == '')
             prompt = ' ';
 
-        // prompt = prompt.toLowerCase();
-            
         var numImgs = Number($('#num-imgs').val());
         if (numImgs == 0) {
             alert('Please input a positive number of images.');
@@ -321,8 +359,15 @@
             unMasked = savedData.unMasked;
             seed = savedData.seed;
         }
+
+        var initImg = null;
+        var imgToImg = false;
+        if (activelyImgToImgId != null) {
+            initImg = $('img[generation-id=' + activelyImgToImgId + ']').attr('src').split(',')[1];
+            imgToImg = true;
+        }
         
-        seeds = []
+        var seeds = []
         if (seed == 0) {
             for (var i = 0; i < numImgs; i++) 
                 seeds.push(Math.floor(Math.random() * 9999999));
@@ -331,13 +376,13 @@
                 seeds.push(seed);
         }
 
-        params = { prompt: c(prompt), batch_size: numImgs, seeds: seeds, variance_vector: variance, mask: mask != null ? mask.split(',')[1] : null, un_masked: unMasked != null ? unMasked.split(',')[1] : null };
+        var params = { prompt: c(prompt), batch_size: numImgs, seeds: seeds, variance_vector: variance, mask: mask != null ? mask.split(',')[1] : null, un_masked: unMasked != null ? unMasked.split(',')[1] : null, init_img: initImg };
 
         for (var sliderOpts of sliderOptionArr)
             params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
 
         displayLoading();
-        $.post(window.location.href + 'generate', JSON.stringify(params))
+        $.post(window.location.href + (imgToImg ? 'imgtoimg' : 'generate'), JSON.stringify(params))
         .done(
             function (resp, status) {
                 addImgElems(resp, params, mask, unMasked);
@@ -398,7 +443,7 @@
             addInpaintingIcons($image);
     }
 
-    function addImgElems(data, params, mask, unMasked, upscaled = false) {
+    function addImgElems(data, params, mask, unMasked, upscaled = false, uploaded = false) {
         params.mask = null;
         params.unMasked = null;
         params.variance_vector = null;        
@@ -407,12 +452,24 @@
         var imgElems = [];
         var idx = 0;
 
+        if (uploaded) {
+            params.prompt = ' ';
+            params.scale = 7.5;
+            params.ddim_steps = 50;
+            params.variance_scale = 0.2;
+            params.seeds = [Math.floor(Math.random() * 9999999)];
+        }
+
         for (var img of imgs) {
-            var savedData = {
-                seed: params.seeds[idx],
-                params: params,
-                variance: variances[idx],
-            };
+            var savedData = { params: params };
+            if (!uploaded) {
+                savedData = {
+                    seed: params.seeds[idx],
+                    params: params,
+                    variance: variances[idx],
+                };
+            }
+
             var $imgContainer = $('<div class="col-4 image-cell"></div>');
             i = new Image();
             i.onload = function() {
@@ -427,16 +484,19 @@
             var $closeIcon = createCloseIcon();
             var $variationIcon = createVariationIcon();
             var $upscaleIcon = createUpscaleIcon();
+            var $imgToImgIcon = createImgToImgIcon();
             $variationIcon.attr('generation-id', generationId);
             $imgContainer.attr('generation-id', generationId);
             $upscaleIcon.attr('generation-id', generationId);
             $closeIcon.attr('generation-id', generationId);
+            $imgToImgIcon.attr('generation-id', generationId);
             $imgContainer.append($imgElem);
             $imgContainer.append($closeIcon);
 
             if (!upscaled) {
                 $imgContainer.append($variationIcon);
-                $imgContainer.append($upscaleIcon);                
+                $imgContainer.append($upscaleIcon);
+                $imgContainer.append($imgToImgIcon);
             }
 
             $imgContainer.click(function() {
@@ -472,6 +532,23 @@
                 $('#scale-slider').val(params.scale).trigger('input'); 
                 $('#variation-group').fadeIn(200);
             });
+            $imgToImgIcon.click(function (e) {
+                e.stopPropagation();
+                var savedData = generationData[$(this).attr('generation-id')];
+                var params = savedData.params;
+                var seed = savedData.seed;
+                clearVariance();
+                variance = savedData.variance;
+                $(this).parent().addClass('active-imgtoimg');
+                activelyImgToImgId = Number($(this).attr('generation-id'));
+                
+                $('#prompt-input').val(d(params.prompt));
+                $('#width-slider').val(params.W).trigger('input');
+                $('#height-slider').val(params.H).trigger('input');
+                $('#steps-slider').val(params.ddim_steps).trigger('input');
+                $('#scale-slider').val(params.scale).trigger('input');
+                $('#imgtoimg-group').fadeIn(200);
+            });            
             $imgContainer.hide();
             $('#image-grid-elem').prepend($imgContainer);
             $imgContainer.fadeIn(200);
@@ -479,7 +556,7 @@
             if (mask != null) {
                 savedData.mask = mask;
                 savedData.unMasked = unMasked;
-                addMaskIcon(generationId);
+                //addMaskIcon(generationId);
             }
             savedData.upscaled = upscaled;
             generationData[generationId.toString()] = savedData;
@@ -493,9 +570,9 @@
         for (var sliderOptions of sliderOptionArr) {
             var $sliderElem = createSlider(sliderOptions);
             if (sliderOptions.target == null)
-                $sliderElem.insertBefore($('#control-panel-elem :nth-last-child(3)').last());
+                $sliderElem.insertBefore($('#control-panel-elem :nth-last-child(4)').last());
             else                
-                $sliderElem.insertBefore($('#variation-group').children().last())
+                $sliderElem.insertBefore($('#' + sliderOptions.target).children().last());
         }
 
         $('#width-slider, #height-slider').on('change', function () {
@@ -543,9 +620,12 @@
     }
 
     function clearVariance() {
-        $('#variation-group').fadeOut(200);
+        $('#variation-group').hide();
+        $('#imgtoimg-group').hide();
         activelyVaryingId = null;
+        activelyImgToImgId = null;
         $('.image-cell').removeClass('active-variance');
+        $('.image-cell').removeClass('active-imgtoimg');
         variance = null;
     }
 
@@ -584,6 +664,11 @@
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
     }
 
+    function createImgToImgIcon() {
+        return $('<span class="imgtoimg-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate img2img mode">' +
+            '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-image"></i></span>');
+    }    
+
     function createInpaintingIcon() {
         return $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
@@ -600,7 +685,7 @@
     }
 
     function createVariationIcon() {
-        return $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Create variations">' + 
+        return $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate variation mode">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-eye-dropper"></i></span>');
     }
 
@@ -657,13 +742,13 @@
         if (!isCanvasBlank(canvas)) {
             generationData[generationId.toString()].mask = canvas.toDataURL();
             generationData[generationId.toString()].unMasked = $canvas.parent().find('img').attr('src');
-            if (hasNoMaskIcon(generationId))
-                addMaskIcon(generationId);            
+            //if (hasNoMaskIcon(generationId))
+                //addMaskIcon(generationId);            
         } else {
             generationData[generationId.toString()].mask = null;
             generationData[generationId.toString()].unMasked = null;
-            if (!hasNoMaskIcon(generationId))
-                removeMaskIcon(generationId);
+            //if (!hasNoMaskIcon(generationId))
+                //removeMaskIcon(generationId);
         }
         
         $('.clear-mask-icon').hide();
