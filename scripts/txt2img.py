@@ -59,72 +59,142 @@ def outpaint(request_obj, model, device):
     amount = request_obj.amount
     img = request_obj.image
     direction = request_obj.dir
-    mask_buffer = 64
+    mask_buffer = 32
 
     image = Image.open(BytesIO(base64.b64decode(img))).convert("RGB")
+    original_size = (image.size[0], image.size[1])
 
-    new_size = (image.size[0] + amount, image.size[1])
-    if direction == 'up' or direction == 'down':
-        new_size = (image.size[0], image.size[1] + amount)
-
-    new_img = Image.new('RGB', new_size)
-    mask = Image.new('RGBA', new_size, (0,0,0,0))
-
-    orig_mask_paste_x = 0
-    orig_mask_paste_y = 0
-    orig_paste_x = 0
-    orig_paste_y = 0
-    orig_apnd_img_w = image.size[0]
-    orig_apnd_img_h = amount
-
-    mask_mask_paste_x = 0
-    mask_mask_paste_y = 0
-    mask_apnd_img_w = image.size[0]
-    mask_apnd_img_h = amount + mask_buffer
-
-    if direction == 'right' or direction == 'left':
-        orig_apnd_img_w = amount
-        orig_apnd_img_h = image.size[1]
-        mask_apnd_img_w = amount + mask_buffer
-        mask_apnd_img_h = image.size[1]
+    mask_crop_left = mask_buffer
+    mask_crop_right = image.size[0] - mask_buffer
+    mask_crop_top = mask_buffer
+    mask_crop_bottom = image.size[1] - mask_buffer
 
     if direction == 'right':
-        orig_mask_paste_x = image.size[0]
-        mask_mask_paste_x = image.size[0] - mask_buffer
+        mask_crop_left = 0
+    elif direction == 'down':
+        mask_crop_top = 0
+    elif direction == 'left':
+        mask_crop_right = image.size[0]
+    elif direction == 'up':
+        mask_crop_bottom = image.size[1]
 
+    mask = Image.new('RGBA', (mask_crop_right - mask_crop_left, mask_crop_bottom - mask_crop_top), (0,0,0,0))
+
+    final_size = (original_size[0] + amount, original_size[1] + amount)
+    final_img = Image.new('RGB', final_size, (128,128,128))
+    final_mask = Image.new('RGBA', final_size, (0,0,0,255))
+
+    if direction == 'right':
+        mask_final_paste_x = 0
+        mask_final_paste_y = int((amount / 2) + mask_buffer)
+        final_paste_x = 0
+        final_paste_y = int(amount / 2)
     if direction == 'down':
-        orig_mask_paste_y = image.size[1]
-        mask_mask_paste_y = image.size[1] - mask_buffer
-
+        mask_final_paste_x = int((amount / 2) + mask_buffer)
+        mask_final_paste_y = 0
+        final_paste_x = int(amount / 2)
+        final_paste_y = 0        
     if direction == 'left':
-        orig_paste_x = amount
-
+        mask_final_paste_x = amount + mask_buffer
+        mask_final_paste_y = int((amount / 2) + mask_buffer)
+        final_paste_x = amount
+        final_paste_y = int(amount / 2)   
     if direction == 'up':
-        orig_paste_y = amount
+        mask_final_paste_x = int((amount / 2) + mask_buffer)
+        mask_final_paste_y = amount + mask_buffer
+        final_paste_x = int(amount / 2)
+        final_paste_y = amount
 
-    
-    mask.paste(Image.new('RGBA', (mask_apnd_img_w, mask_apnd_img_h), (0,0,0,255)), (mask_mask_paste_x, mask_mask_paste_y))
-    new_img.paste(Image.new('RGB', (orig_apnd_img_w, orig_apnd_img_h), (0,0,0)), (orig_mask_paste_x, orig_mask_paste_y))
-    new_img.paste(image, (orig_paste_x, orig_paste_y))
+    final_img.paste(image, (final_paste_x, final_paste_y))
+    final_mask.paste(mask, (mask_final_paste_x, mask_final_paste_y))
+
+    final_img.thumbnail(original_size, Image.ANTIALIAS)
+    final_mask.thumbnail(original_size, Image.ANTIALIAS)
 
     buffered = BytesIO()
-    mask.save(buffered, 'png')
+    final_mask.save(buffered, 'png')
     mask_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
     buffered = BytesIO()
-    new_img.save(buffered, 'png')
+    final_img.save(buffered, 'png')
     new_img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
     request_obj.mask = mask_str
     request_obj.un_masked = new_img_str
 
-    if not hasattr(request_obj, 'seeds'):
-        request_obj.seeds = [random.randint(1, 999999)]
+    request_obj.seed = random.randint(1, 999999)
+    request_obj.seeds = [random.randint(1, 999999)]
 
     images, new_variances = txt2img(request_obj, model, device)
 
     print('finished outpainting')
-    return images, new_variances, mask_str
+    return images, new_variances, mask_str        
+
+
+    # new_size = (image.size[0] + amount, image.size[1])
+    # final_size = (image.size[0] + amount, image.size[1] + amount)
+
+    # if direction == 'up' or direction == 'down':
+    #     new_size = (image.size[0], image.size[1] + amount)
+
+    # new_img = Image.new('RGB', new_size)
+    # mask = Image.new('RGBA', new_size, (0,0,0,0))
+
+    # orig_mask_paste_x = 0
+    # orig_mask_paste_y = 0
+    # orig_paste_x = 0
+    # orig_paste_y = 0
+    # orig_apnd_img_w = image.size[0]
+    # orig_apnd_img_h = amount
+
+    # mask_mask_paste_x = 0
+    # mask_mask_paste_y = 0
+    # mask_apnd_img_w = image.size[0]
+    # mask_apnd_img_h = amount + mask_buffer
+
+    # if direction == 'right' or direction == 'left':
+    #     orig_apnd_img_w = amount
+    #     orig_apnd_img_h = image.size[1]
+    #     mask_apnd_img_w = amount + mask_buffer
+    #     mask_apnd_img_h = image.size[1]
+
+    # if direction == 'right':
+    #     orig_mask_paste_x = image.size[0]
+    #     mask_mask_paste_x = image.size[0] - mask_buffer
+
+    # if direction == 'down':
+    #     orig_mask_paste_y = image.size[1]
+    #     mask_mask_paste_y = image.size[1] - mask_buffer
+
+    # if direction == 'left':
+    #     orig_paste_x = amount
+
+    # if direction == 'up':
+    #     orig_paste_y = amount
+
+    
+    # mask.paste(Image.new('RGBA', (mask_apnd_img_w, mask_apnd_img_h), (0,0,0,255)), (mask_mask_paste_x, mask_mask_paste_y))
+    # new_img.paste(Image.new('RGB', (orig_apnd_img_w, orig_apnd_img_h), (0,0,0)), (orig_mask_paste_x, orig_mask_paste_y))
+    # new_img.paste(image, (orig_paste_x, orig_paste_y))
+
+    # final_img = Image.new('RGB', final_size, (0,0,0))
+    # final_mask = Image.new('RGBA', final_size, (0,0,0,255))
+    
+    # if direction == 'right':
+    #     final_paste_x = 0
+    #     final_paste_y = int(amount / 2)
+    # if direction == 'down':
+    #     final_paste_x = int(amount / 2)
+    #     final_paste_y = 0
+    # if direction == 'left':
+    #     final_paste_x = 0
+    #     final_paste_y = int(amount / 2)
+    # if direction == 'up':
+    #     final_paste_x = int(amount / 2)
+    #     final_paste_y = 0
+
+    # print(final_paste_x)
+    # print(final_paste_y)
 
 def imgtoimg(request_obj, model, device):
     print('starting to generate imgtoimg images')
@@ -226,7 +296,7 @@ def txt2img(request_obj, model, device):
     np.set_printoptions(threshold=sys.maxsize)
     if request_obj.mask is not None:
         mask_img = Image.open(BytesIO(base64.b64decode(request_obj.mask))).convert("RGBA").split()[-1]
-        mask_img = mask_img.filter(ImageFilter.GaussianBlur(2))
+        mask_img = mask_img.filter(ImageFilter.GaussianBlur(4))
         un_masked_img = Image.open(BytesIO(base64.b64decode(request_obj.un_masked))).convert("RGB")
         mask_img = mask_img.resize((GR.GR.W//GR.GR.f, GR.GR.H//GR.GR.f), resample=Image.LANCZOS)                
         mask = np.array(mask_img).astype(np.float32) / 255.0

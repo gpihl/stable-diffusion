@@ -78,7 +78,7 @@
 
         .spinning-logo {
             animation-name: spin;
-            animation-duration: 1500ms;
+            animation-duration: 1000ms;
             animation-iteration-count: infinite;
             animation-timing-function: linear; 
             /* transform: rotate(3deg); */
@@ -408,10 +408,10 @@
         var H = Number(params.H);
         var W = Number(params.W)
 
-        if (dir == 'up' || dir == 'down')
-            H += amount;
-        else if (dir == 'left' || dir == 'right')
-            W += amount;
+        // if (dir == 'up' || dir == 'down')
+        //     H += amount;
+        // else if (dir == 'left' || dir == 'right')
+        //     W += amount;
 
         params.H = H;
         params.W = W;
@@ -792,7 +792,7 @@
     function createMaskIcon() {
         var $icon = $('<span class="mask-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
-        $icon.tooltip();
+        
         return $icon;
     }
 
@@ -821,7 +821,7 @@
 
         var $icon = $('<span class="outpainting-icon image-icon ' + classX + ' ' + classY + '" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Outpaint image">' +
             '<i class="icon-fg fa-solid ' + faClass + '"></i></span>');
-        $icon.tooltip();
+        
         $icon.attr('generation-id', generationId);
         $icon.click(function (e) {
             e.stopPropagation();
@@ -833,42 +833,42 @@
     function createImgToImgIcon() {
         var $icon = $('<span class="imgtoimg-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate img2img mode">' +
             '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-image"></i></span>');
-        $icon.tooltip();
+        
         return $icon;
     }    
 
     function createInpaintingIcon() {
         var $icon = $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
-        $icon.tooltip();
+        
         return $icon;            
     }
 
     function createClearMaskIcon() {
         var $icon = $('<span style="display: none;" class="clear-mask-icon image-icon icon-bottom icon-left" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
             '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-trash-can" style="left: 1px;"></i></span>');
-        $icon.tooltip();
+        
         return $icon;            
     }
     
     function createCloseIcon() {
         var $icon = $('<span class="image-icon icon-left icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
                 '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>');
-        $icon.tooltip();
+        
         return $icon;
     }
 
     function createVariationIcon() {
         var $icon = $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate variation mode">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-eye-dropper"></i></span>');
-        $icon.tooltip();
+        
         return $icon;                
     }
 
     function createUpscaleIcon() {
         var $icon = $('<span class="upscale-icon image-icon icon-left icon-bottom" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Upscale image">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-arrow-up" style="left: 2.5px;"></i></span>');
-        $icon.tooltip();
+        
         return $icon;                
     }    
 
