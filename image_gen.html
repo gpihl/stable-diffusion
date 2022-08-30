@@ -1,4 +1,5 @@
 <head>
+    <title>Gurra Diffusion</title>
     <!-- <script src="https://use.fontawesome.com/cab5b1ad63.js"></script>    -->
     <script src="https://kit.fontawesome.com/8634629d3c.js" crossorigin="anonymous"></script>     
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -13,8 +14,10 @@
         #generate-button { float: right; width: 130px; color: #c1bbbb; }
         #variation-group { background-color: #532424; border-radius: 7px; margin-top: 14px; padding-bottom: 10px; display: none; position: relative; }
         #imgtoimg-group { background-color: #24532a; border-radius: 7px; margin-top: 14px; padding-bottom: 10px; display: none; position: relative; }        
-        #download-button { width: 250px; color: #c1bbbb; background-color: #333333 !important; }
-        #upload-button { width: 250px; color: #c1bbbb; background-color: #333333 !important; }        
+        #download-button { width: 250px; color: var(--text-color); background-color: #333333 !important; border-color: #333333; }
+        #download-button:hover { border-color: #777777; }
+        #upload-button { width: 250px; color: var(--text-color); background-color: #333333 !important; border-color: #333333; }
+        #upload-button:hover { border-color: #777777; }
 
         body { background-color: #303030; height: 100%; }
         canvas { position: absolute; z-index: 999999; width: -webkit-fill-available; height: calc(100% - 21px); cursor: crosshair; }
@@ -23,27 +26,33 @@
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
 
+        #request-queue-group { text-align: center; }
+        .queue-elem { color: var(--text-color); }
+
         .noselect { -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
         .logo { color: #777777; font-size: 30px; float: left; }
-        .active-variance { border: 9px solid #a93a3a; border-radius: 15px; }
-        .active-imgtoimg { border: 9px solid #47a93a; border-radius: 15px; }        
+        .active-variance { border: 9px solid #a93a3a !important; border-radius: 15px; }
+        .active-imgtoimg { border: 9px solid #47a93a !important; border-radius: 15px; }        
         .settings-input { height: 25px; text-align: right; margin-top: 6px; }
         .input-bar { z-index: 1000; position: fixed; width: 100%; padding: 9px; background-color: #292525; }
         .control-panel { z-index: 1000; position: fixed; top: 68px; right: 0px; height: 100%; width: 300px; background-color: #2f2a2a; padding: 15px; }
         .fade { transition:100ms !important; }
 
         .image-grid { position: absolute; width: -webkit-calc(100% - 302px); width: -moz-calc(100% - 302px); width: calc(100% - 302px); top: 69px; left: 16px; }            
-        .image-cell { text-align: center; margin-bottom: 6px; cursor: pointer; }
+        .image-cell { text-align: center; cursor: pointer; background: #414141; border: 2px solid #303030; border-radius: 10px; }
         .image-cell:after { content: "s"; display: block; padding-bottom: 100%; color: #00000000; }
         .image-cell > img { position: absolute; }
-        .horizontal-img { width: 100%; transform: translate(-50%, -50%); top: 50%; border-radius: 7px; }
-        .vertical-img { height: 100%; transform: translateX(-50%); border-radius: 7px; }
+        .horizontal-img { width: 98%; transform: translate(-50%, -50%); top: 50%; border-radius: 7px; }
+        .vertical-img { height: 98%; transform: translateX(-50%); border-radius: 7px; top: 1%; }
+        .square-img { width: 98%; height: 98%; transform: translateX(-50%); border-radius: 7px; top: 1%; }
         .image-icon { position: absolute; cursor: pointer; opacity: 0.6; font-size: 20px; }
         .image-icon:hover { opacity: 1.0; }
         .icon-right { right: 30px; }
         .icon-left { left: 9px; }
-        .icon-top { top: 6px; }
-        .icon-bottom { bottom: 24px; }
+        .icon-top { top: 9px; }
+        .icon-bottom { bottom: 30px; }
+        .icon-middle-x { left: calc(50% - 7.5px); }
+        .icon-middle-y { top: calc(50% - 10px); }
         .icon-bg { position: absolute; color: black; }
         .icon-fg { position: absolute; color: white; }
         .clear-mask-icon, .inpainting-icon { z-index: 9999999; }
@@ -66,6 +75,26 @@
 
         .modal-dialog { height: 90%; width: 100%; max-width: unset; }
         .modal-content { height: 100%; background-color: transparent; }
+
+        .spinning-logo {
+            animation-name: spin;
+            animation-duration: 1500ms;
+            animation-iteration-count: infinite;
+            animation-timing-function: linear; 
+            /* transform: rotate(3deg); */
+            /* transform: rotate(0.3rad);/ */
+            /* transform: rotate(3grad); */ 
+            /* transform: rotate(.03turn);  */
+        }
+
+        .paused {
+            animation-play-state: paused;
+        }
+
+        @keyframes spin {
+            from { transform:rotate(0deg); }
+            to { transform:rotate(360deg); }
+        }        
     </style>
 </head>
 
@@ -82,17 +111,13 @@
 
 <body class="noselect">
     <div class="input-bar">
-        <div class="logo mr-3"><i class="fa-solid fa-fan mr-2"></i>G-Diff</div>
-        <button id="generate-button" type="button" class="btn btn-secondary ml-3 mr-1 mt-1" onclick="generate();">
-            <div id="button-default-content">Create</div>
-            <div id="button-loading-content" style="display: none;">
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Loading...
-            </div>
+        <div class="logo mr-3"><i class="fa-solid fa-palette mr-2 logo-img spinning-logo paused"></i>GurraDiff</div>
+        <button id="generate-button" type="button" class="btn btn-secondary ml-3 mr-1 mt-1" onclick="addRequest('txt2img')">
+            <div id="button-default-content">Create</div>            
         </button>                
         <input id="prompt-input" class="form-control form-control-lg" type="text" placeholder="Enter prompt">
     </div>
-    <div id="control-panel-elem" class="control-panel">
+    <div id="control-panel-elem" class="control-panel">        
         <div class="slider-group">
             <div class="slider-title">Number of images</div>
             <input id="num-imgs" type="number" class="form-control settings-input" value="3" max="16" min="1" onclick="this.select();">
@@ -105,14 +130,15 @@
         </div>        
         <hr/>
         <div class="slider-group" style="text-align: center;">
-            <button id="download-button" type="button" class="btn btn-secondary mt-3" onclick="downloadAllImgs();">
+            <!-- <button id="download-button" type="button" class="btn btn-secondary mt-3" onclick="downloadAllImgs();">
                 Save images <i class="fa-solid fa-floppy-disk ml-2"></i>
-            </button>
-            <label id="upload-button" for="upload-input" class="btn btn-secondary mt-2" style="cursor: pointer;">
+            </button> -->
+            <label id="upload-button" for="upload-input" class="btn btn-secondary mt-3" style="cursor: pointer;">
                 Upload image <i class="fa-solid fa-cloud-arrow-up ml-2"></i>
             </label>
             <input id="upload-input" type="file" style="display: none;" onchange="uploadImage(this);">
         </div>
+        <div id="request-queue-group" class="mt-2"></div>
     </div>
     <div id="image-grid-elem" class="image-grid row"></div>
 </body>
@@ -124,7 +150,7 @@
         { name: 'Quality', id: 'steps-slider', minVal: 5, maxVal: 100, defaultVal: 30, sdName: 'ddim_steps', quantizeVal: 5, units: 'steps' },
         { name: 'Prompt strictness', id: 'scale-slider', minVal: -10, maxVal: 10, defaultVal: 7, sdName: 'scale', quantizeVal: 0.5 },        
         { name: 'Variation amount', id: 'variance-scale-slider', minVal: 0, maxVal: 0.5, defaultVal: 0.2, sdName: 'variance_scale', quantizeVal: 0.05, target: 'variation-group' },        
-        { name: 'Img2Img Depth', id: 'imgtoimg-depth-slider', minVal: 0.0, maxVal: 1.0, defaultVal: 0.75, sdName: 'strength', quantizeVal: 0.05, target: 'imgtoimg-group' },
+        { name: 'Img2Img Depth', id: 'imgtoimg-depth-slider', minVal: 0.05, maxVal: 0.95, defaultVal: 0.75, sdName: 'strength', quantizeVal: 0.05, target: 'imgtoimg-group' },
     ];
     var activelyVaryingId = null;
     var activelyImgToImgId = null;
@@ -136,6 +162,7 @@
     var generationData = {};
     var generationId = 0;
     var undoStack = [];
+    var requestQueue = [];
     const canvas = document.querySelector('#canvas');
     const ctx = canvas.getContext('2d');
 
@@ -158,9 +185,9 @@
                         idx = e.keyCode == 37 ? idx - 1 : (idx + 1) % totalImgs;
                         idx = idx < 0 ? totalImgs - 1 : idx;
                     } else if (e.keyCode == 88) {
-                        $('#image-grid-elem').children().eq(idx).remove();
-                        indexImgs();
-                        idx %= (totalImgs - 1)
+                        var generationId = $('#image-grid-elem').children().eq(idx).attr('generation-id');
+                        removeImg(generationId);
+                        idx %= (totalImgs - 1);
                         if (totalImgs - 1 == 0) {
                             $('#img-modal').modal('hide');
                             return;
@@ -179,8 +206,8 @@
         });
 
         $('body').keyup(function(e) {
-            if (e.keyCode == 13 && !loading)
-                generate();
+            if (e.keyCode == 13)
+                addRequest('txt2img');
         });    
 
         $('input').keyup(function(e) {
@@ -210,7 +237,73 @@
                 }
             }        
         });
+
+        $('#prompt-input').focus();
     });
+
+    function addRequest(requestType, opts = []) {
+        var params;
+        if (requestType == 'txt2img' && activelyImgToImgId != null)
+            requestType = 'img2img';
+
+        if (requestType == 'txt2img') {
+            params = getGenerationRequestParams(...opts);
+        } else if (requestType == 'img2img') {
+            params = getGenerationRequestParams(...opts);
+        } else if (requestType == 'outpaint') {
+            params = getOutpaintRequestParams(...opts);
+        } else if (requestType == 'upscale') {
+            params = getUpscaleRequestParams(...opts);
+        }
+
+        
+        var uiLabel = requestType.charAt(0).toUpperCase() + requestType.slice(1);
+        if (requestType == 'txt2img')
+            uiLabel = d(params.prompt);
+            if (uiLabel.length > 15)
+                uiLabel = uiLabel.slice(0, 15).trim() + '...';
+
+        $uiElem = $('<div class="queue-elem">' + uiLabel + '<span class="spinner-border spinner-border-sm ml-2" role="status" aria-hidden="true"></span></div>');
+        $('#request-queue-group').append($uiElem);
+        requestQueue.push({ requestType, params, $uiElem });
+
+        handleRequests();
+    }
+
+    function handleRequests() {
+        if (loading)
+            return;
+        
+        if (requestQueue.length == 0) {
+            $('.logo-img').addClass('paused');
+            return;
+        }
+
+        loading = true;
+        $('.logo-img').removeClass('paused');
+        var request = requestQueue.shift();
+        var requestType = request.requestType;
+
+        if (requestType == 'txt2img') {
+            generate(request, false);
+        } else if (requestType == 'img2img') {
+            generate(request, true);
+        } else if (requestType == 'outpaint') {
+            outpaint(request);
+        } else if (requestType == 'upscale') {
+            upscale(request);
+        }
+    }
+
+    function removeImg(generationId) {
+        $imgElem = $('.image-cell[generation-id=' + generationId + ']');
+        if ($imgElem.hasClass('active-variance') || $imgElem.hasClass('active-imgtoimg'))
+            clearVariance();
+        
+        $imgElem.remove();
+        indexImgs();
+        delete generationData[generationId];
+    }
 
     function uploadImage(fileInput) {
         var file = fileInput.files[0];
@@ -221,16 +314,13 @@
             var base64img = reader.result.split(',')[1];
             var data = { img: base64img, extension: extension };
 
-            displayLoading();            
             $.post(window.location.href + 'uploadimg', JSON.stringify(data))
             .done(
                 function (resp, status) {
                     addImgElems({ imgs: resp.img }, { W: resp.w, H: resp.h }, null, null, false, true);
-                    hideLoading();
                 }
             ).fail(
                 function (resp, status) {
-                    hideLoading();
                     alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
                 }
             ); 
@@ -280,31 +370,38 @@
         return res;
     }    
 
-    function upscale(genId) {
-        savedData = generationData[genId];
-        params = savedData.params;
-        base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
+    function getUpscaleRequestParams(genId) {
+        var savedData = generationData[genId];
+        var params = { ...savedData.params };
+        var base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
         params.image = base64img;
 
-        displayLoading();
-        $.post(window.location.href + 'upscale', JSON.stringify(params))
+        return params;
+    }
+
+    function upscale(request) {
+        $.post(window.location.href + 'upscale', JSON.stringify(request.params))
         .done(
             function (resp, status) {
-                addImgElems(resp, params, null, null, true);
-                hideLoading();
+                addImgElems(resp, request.params, null, null, true);
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
             }
         ).fail(
             function (resp, status) {
-                hideLoading();
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();                
                 alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
             }
         );         
     }
 
-    function outpaint(genId, dir, amount) {
-        savedData = generationData[genId];
-        params = savedData.params;
-        base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
+    function getOutpaintRequestParams(genId, dir, amount) {
+        var savedData = generationData[genId];
+        var params = { ...savedData.params };
+        var base64img = $('img[generation-id=' + genId + ']').attr('src').split(',')[1];
         params.image = base64img;
         params.dir = dir;
         params.amount = amount;
@@ -316,29 +413,33 @@
         else if (dir == 'left' || dir == 'right')
             W += amount;
 
-        params = { ...savedData.params };
         params.H = H;
         params.W = W;
         params.batch_size = 1;
-        displayLoading();
-        $.post(window.location.href + 'outpaint', JSON.stringify(params))
+
+        return params;
+    }
+
+    function outpaint(request) {
+        $.post(window.location.href + 'outpaint', JSON.stringify(request.params))
         .done(
             function (resp, status) {
-                addImgElems(resp, params, 'data:image/png;base64, ' + resp.mask, 'data:image/png;base64, ' + resp.imgs[0]);
-                hideLoading();
+                addImgElems(resp, request.params, 'data:image/png;base64, ' + resp.mask, 'data:image/png;base64, ' + resp.imgs[0]);
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
             }
         ).fail(
             function (resp, status) {
-                hideLoading();
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
                 alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
             }
         );
     }
 
-    function generate() {
-        if (loading)
-            return;
-
+    function getGenerationRequestParams() {
         var prompt = $('#prompt-input').val();
         if (prompt == '')
             prompt = ' ';
@@ -361,10 +462,8 @@
         }
 
         var initImg = null;
-        var imgToImg = false;
         if (activelyImgToImgId != null) {
             initImg = $('img[generation-id=' + activelyImgToImgId + ']').attr('src').split(',')[1];
-            imgToImg = true;
         }
         
         var seeds = []
@@ -376,21 +475,38 @@
                 seeds.push(seed);
         }
 
-        var params = { prompt: c(prompt), batch_size: numImgs, seeds: seeds, variance_vector: variance, mask: mask != null ? mask.split(',')[1] : null, un_masked: unMasked != null ? unMasked.split(',')[1] : null, init_img: initImg };
+        var params = { 
+            prompt: c(prompt), 
+            batch_size: numImgs, 
+            seeds: seeds, 
+            variance_vector: variance, 
+            mask: mask != null ? mask.split(',')[1] : null, 
+            un_masked: unMasked != null ? unMasked.split(',')[1] : null, 
+            init_img: initImg 
+        };
 
         for (var sliderOpts of sliderOptionArr)
             params[sliderOpts.sdName] = $('#' + sliderOpts.id).val().toLowerCase();
 
-        displayLoading();
-        $.post(window.location.href + (imgToImg ? 'imgtoimg' : 'generate'), JSON.stringify(params))
+        return params;
+    }
+
+    function generate(request, imgToImg) {
+        $.post(window.location.href + (imgToImg ? 'imgtoimg' : 'generate'), JSON.stringify(request.params))
         .done(
             function (resp, status) {
-                addImgElems(resp, params, mask, unMasked);
-                hideLoading();
+                var mask = request.params.mask != null ? 'data:image/png;base64,' + request.params.mask : null;
+                var unMasked = request.params.un_masked != null ? 'data:image/png;base64,' + request.params.un_masked : null;
+                addImgElems(resp, request.params, mask, unMasked);
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
             }
         ).fail(
             function (resp, status) {
-                hideLoading();
+                loading = false;
+                request.$uiElem.remove();
+                handleRequests();
                 alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!')
             }
         ); 
@@ -426,7 +542,6 @@
             }
         ).fail(
             function (resp, status) {
-                hideLoading();
                 alert('Something went wrong, maybe not enough GPU memory. Try smaller resolution and/or fewer images!');
             }
         );
@@ -475,8 +590,10 @@
             i.onload = function() {
                 if (i.width > i.height)
                     $(this).addClass('horizontal-img');
-                else
+                else if (i.width < i.height)
                     $(this).addClass('vertical-img');
+                else
+                    $(this).addClass('square-img');
             };
             i.src = 'data:image/png;base64, ' + img.slice(0, -1);
             var $imgElem = $(i);
@@ -484,7 +601,7 @@
             var $closeIcon = createCloseIcon();
             var $variationIcon = createVariationIcon();
             var $upscaleIcon = createUpscaleIcon();
-            var $imgToImgIcon = createImgToImgIcon();
+            var $imgToImgIcon = createImgToImgIcon();            
             $variationIcon.attr('generation-id', generationId);
             $imgContainer.attr('generation-id', generationId);
             $upscaleIcon.attr('generation-id', generationId);
@@ -497,7 +614,21 @@
                 $imgContainer.append($variationIcon);
                 $imgContainer.append($upscaleIcon);
                 $imgContainer.append($imgToImgIcon);
+                $imgContainer.append(createOutpaintingIcon('up', generationId));
+                $imgContainer.append(createOutpaintingIcon('down', generationId));
+                $imgContainer.append(createOutpaintingIcon('left', generationId));
+                $imgContainer.append(createOutpaintingIcon('right', generationId));
             }
+
+            $imgContainer.find('.image-icon').css('display', 'none');
+            $imgContainer.hover(
+                function() {
+                    $(this).find('.image-icon').fadeIn(150);
+                }, 
+                function() {
+                    $(this).find('.image-icon').fadeOut(150);
+                }
+            );
 
             $imgContainer.click(function() {
                 var $image = $(this).children('img').first();
@@ -507,14 +638,13 @@
             $closeIcon.click(function (e) {
                 e.stopPropagation();
                 $(this).parent().fadeOut(200, function() {
-                    $(this).remove();
-                    indexImgs();
-                });
-                delete generationData[$(this).attr('generation-id')];
+                    removeImg($(this).attr('generation-id'));                    
+                });                
             });
             $upscaleIcon.click(function (e) {
                 e.stopPropagation();
-                upscale($(this).attr('generation-id'));
+                addRequest('upscale', [$(this).attr('generation-id')]);
+                // upscale($(this).attr('generation-id'));
             })
             $variationIcon.click(function (e) {
                 e.stopPropagation();
@@ -570,7 +700,7 @@
         for (var sliderOptions of sliderOptionArr) {
             var $sliderElem = createSlider(sliderOptions);
             if (sliderOptions.target == null)
-                $sliderElem.insertBefore($('#control-panel-elem :nth-last-child(4)').last());
+                $sliderElem.insertBefore($('#control-panel-elem :nth-last-child(5)').last());
             else                
                 $sliderElem.insertBefore($('#' + sliderOptions.target).children().last());
         }
@@ -598,19 +728,19 @@
         return $groupElem;
     }
 
-    function displayLoading() {
-        $('#generate-button').prop("disabled", true);
-        $('#button-default-content').hide();
-        $('#button-loading-content').show();
-        loading = true;
-    }
+    // function displayLoading() {
+    //     // $('#generate-button').prop("disabled", true);
+    //     // $('#button-default-content').hide();
+    //     // $('#button-loading-content').show();
+    //     loading = true;
+    // }
 
-    function hideLoading() {
-        $('#generate-button').prop("disabled", false);
-        $('#button-loading-content').hide();
-        $('#button-default-content').show();
-        loading = false
-    }
+    // function hideLoading() {
+    //     // $('#generate-button').prop("disabled", false);
+    //     // $('#button-loading-content').hide();
+    //     // $('#button-default-content').show();
+    //     loading = false
+    // }
 
     function downloadAllImgs() {
         $('#image-grid-elem').find('img').each(function(i) { 
@@ -660,38 +790,86 @@
     }
 
     function createMaskIcon() {
-        return $('<span class="mask-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
+        var $icon = $('<span class="mask-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="This image has an inpainting mask applied.">' +
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
+        $icon.tooltip();
+        return $icon;
     }
 
+    function createOutpaintingIcon(direction, generationId) {
+        var classX = '';
+        var classY = '';
+        var faClass = '';
+
+        if (direction == 'up') {
+            classX = 'icon-middle-x';
+            classY = 'icon-top';
+            faClass = 'fa-arrow-up';
+        } else if (direction == 'down') {
+            classX = 'icon-middle-x';
+            classY = 'icon-bottom';
+            faClass = 'fa-arrow-down';            
+        } else if (direction == 'right') {
+            classX = 'icon-right';
+            classY = 'icon-middle-y';
+            faClass = 'fa-arrow-right';            
+        } else if (direction == 'left') {
+            classX = 'icon-left';
+            classY = 'icon-middle-y';
+            faClass = 'fa-arrow-left';
+        }
+
+        var $icon = $('<span class="outpainting-icon image-icon ' + classX + ' ' + classY + '" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Outpaint image">' +
+            '<i class="icon-fg fa-solid ' + faClass + '"></i></span>');
+        $icon.tooltip();
+        $icon.attr('generation-id', generationId);
+        $icon.click(function (e) {
+            e.stopPropagation();
+            addRequest('outpaint', [$(this).attr('generation-id'), direction, 128]);
+        });
+        return $icon;
+    }        
+
     function createImgToImgIcon() {
-        return $('<span class="imgtoimg-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate img2img mode">' +
+        var $icon = $('<span class="imgtoimg-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate img2img mode">' +
             '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-image"></i></span>');
+        $icon.tooltip();
+        return $icon;
     }    
 
     function createInpaintingIcon() {
-        return $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
+        var $icon = $('<span class="inpainting-icon image-icon icon-bottom icon-right" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to toggle inpainting mode.">' +
             '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-solid fa-mask"></i></span>');
+        $icon.tooltip();
+        return $icon;            
     }
 
     function createClearMaskIcon() {
-        return $('<span style="display: none;" class="clear-mask-icon image-icon icon-bottom icon-left" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
+        var $icon = $('<span style="display: none;" class="clear-mask-icon image-icon icon-bottom icon-left" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Click to clear mask.">' +
             '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-trash-can" style="left: 1px;"></i></span>');
+        $icon.tooltip();
+        return $icon;            
     }
     
     function createCloseIcon() {
-        return $('<span class="image-icon icon-left icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
+        var $icon = $('<span class="image-icon icon-left icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Delete image">' +
                 '<i class="icon-bg fa-solid fa-circle-xmark"></i><i class="icon-fg fa-regular fa-circle-xmark"></i></span>');
+        $icon.tooltip();
+        return $icon;
     }
 
     function createVariationIcon() {
-        return $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate variation mode">' + 
+        var $icon = $('<span class="variation-icon image-icon icon-right icon-top" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Activate variation mode">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-eye-dropper"></i></span>');
+        $icon.tooltip();
+        return $icon;                
     }
 
     function createUpscaleIcon() {
-        return $('<span class="upscale-icon image-icon icon-left icon-bottom" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Upscale image">' + 
+        var $icon = $('<span class="upscale-icon image-icon icon-left icon-bottom" data-delay="400" data-animation="false" data-toggle="tooltip" data-placement="top" data-trigger="hover" title="Upscale image">' + 
                 '<i class="icon-bg fa-solid fa-circle"></i><i class="icon-fg fa-solid fa-arrow-up" style="left: 2.5px;"></i></span>');
+        $icon.tooltip();
+        return $icon;                
     }    
 
     function addMaskIcon(generationId) {
