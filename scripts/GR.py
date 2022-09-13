@@ -52,7 +52,7 @@ class GR:
         #set and update start code variance
         GR.seeding_func(round(time.time() * 10000000) % 100000)
         for gr in generation_requests:
-            gr.init_start_code_variance(request_obj.variance_vector if hasattr(request_obj, 'variance_vector') else None)
+            gr.init_start_code_variance(request_obj.variance_vector if hasattr(request_obj, 'variance_vector') and request_obj.mask is None else None)
             gr.update_start_code_variance()
 
         #set start code and conditioning
