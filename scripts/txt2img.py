@@ -8,6 +8,7 @@ import math
 import imp
 import base64
 import subprocess
+import kdiffusion.k_diffusion as K
 from io import BytesIO
 from . import GR
 from PIL import Image, ImageOps, ImageFilter
@@ -24,9 +25,85 @@ from collections import namedtuple
 from omegaconf import OmegaConf
 from ldm.util import instantiate_from_config
 
+class CFGDenoiser(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.inner_model = model
+
+    def forward(self, x, sigma, uncond, cond, cond_scale):
+        x_in = torch.cat([x] * 2)
+        sigma_in = torch.cat([sigma] * 2)
+        cond_in = torch.cat([uncond, cond])
+        uncond, cond = self.inner_model(x_in, sigma_in, cond=cond_in).chunk(2)
+        return uncond + (cond - uncond) * cond_scale
+
+class KDiffusionSampler:
+    def __init__(self, m, sampler):
+        self.model = m
+        self.model_wrap = K.external.CompVisDenoiser(m)
+        self.schedule = sampler
+
+
+    def get_sampler_name(self):
+        return self.schedule
+    def sample(self, S, conditioning, batch_size, shape, verbose, unconditional_guidance_scale, unconditional_conditioning, eta, x_T, img_callback):
+        sigmas = self.model_wrap.get_sigmas(S)
+        x = x_T * sigmas[0]
+        model_wrap_cfg = CFGDenoiser(self.model_wrap)
+
+        samples_ddim = K.sampling.__dict__[f'sample_{self.schedule}'](model_wrap_cfg, x, sigmas, extra_args={'cond': conditioning, 'uncond': unconditional_conditioning, 'cond_scale': unconditional_guidance_scale}, disable=False, callback=img_callback)
+
+        return samples_ddim, None
+
 class ObjectFromDict(dict):
     def __init__(self, j):
         self.__dict__ = j
+
+def make_callback(sampler, dynamic_threshold=0, static_threshold=0, inpainting=False, mix_with_x0=False, mix_factor=[0.15, 0.30, 0.60, 1.0], x0=None, noise=None, mask=None):  
+    # Creates the callback function to be passed into the samplers
+    # The callback function is applied to the image after each step
+    def dynamic_thresholding_(img, threshold): # check over implementation to ensure correctness
+        # Dynamic thresholding from Imagen paper (May 2022)
+        s = np.percentile(np.abs(img.cpu()), threshold, axis=tuple(range(1,img.ndim)))
+        s = np.max(np.append(s,1.0))
+        # torch.clamp_(img, -1*s, s) # this causes images to become grey/brown - investigate
+        torch.FloatTensor.div_(img, s)
+
+    # Callback for samplers in the k-diffusion repo, called thus:
+    #   callback({'x': x, 'i': i, 'sigma': sigmas[i], 'sigma_hat': sigmas[i], 'denoised': denoised})
+    def k_callback(args_dict):
+        if static_threshold != 0:
+            torch.clamp_(args_dict['x'], -1*static_threshold, static_threshold)
+        if dynamic_threshold != 0:
+            dynamic_thresholding_(args_dict['x'], dynamic_threshold)
+        if inpainting and x0 is not None and mask is not None and noise is not None:
+            x = x0 + noise * args_dict['sigma']
+            x = x * mask
+            torch.FloatTensor.add_(torch.FloatTensor.mul_(args_dict['x'], (1. - mask)), x)
+        if mix_with_x0 and x0 is not None and noise is not None:
+            x = x0 + noise * args_dict['sigma']
+            try:
+                factor = min(mix_factor[min(args_dict['i'], len(mix_factor)-1)], 1.0)
+            except KeyError:
+                factor = min(mix_factor.values[-1], 1.0)
+            torch.FloatTensor.add_(torch.FloatTensor.mul_(args_dict['x'], factor), x * (1.0 - factor))
+
+    # Function that is called on the image (img) and step (i) at each step
+    def img_callback(img, i):
+        # Thresholding functions
+        if dynamic_threshold != 0:
+            dynamic_thresholding_(img, dynamic_threshold)
+        if static_threshold != 0:
+            torch.clamp_(img, -1*static_threshold, static_threshold)
+
+    if sampler in ["PLMS","DDIM"]: 
+        # Callback function formated for compvis latent diffusion samplers
+        callback = img_callback
+    else: 
+        # Default callback function uses k-diffusion sampler variables
+        callback = k_callback
+
+    return callback
 
 def unflatten(l, n):
     res = []
@@ -242,14 +319,17 @@ def txt2img(request_obj, model, device):
     scale = grs[0].scale
     shape = GR.GR.start_code_shape[1:]
     batch_size = len(grs)
-    sampler = DDIMSampler(model)
+    sampler = KDiffusionSampler(model,'euler_ancestral') #DDIMSampler(model)
+    # sampler = DDIMSampler(model)
 
     mask = None
     x0 = None
     np.set_printoptions(threshold=sys.maxsize)
     original_size_mask = None
+    inpainting = False
 
     if request_obj.mask is not None:
+        inpainting = True
         mask_img = Image.open(BytesIO(base64.b64decode(request_obj.mask))).convert("RGBA").split()[-1]
         mask_img = mask_img.filter(ImageFilter.GaussianBlur(4))
         original_size_mask_img = mask_img.copy()
@@ -275,7 +355,13 @@ def txt2img(request_obj, model, device):
         x0 = model.get_first_stage_encoding(model.encode_first_stage(un_masked))  # move to latent space        
         mask = repeat(mask, '1 ... -> b ...', b=batch_size)
 
-    precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext
+    dynamic_threshold = 0
+    static_threshold = 0
+
+    callback = make_callback("K_diffusion", dynamic_threshold=dynamic_threshold, static_threshold=static_threshold, inpainting=inpainting, x0=x0, noise=start_codes, mask=mask)
+    # callback = make_callback(sampler_name, dynamic_threshold=dynamic_threshold, static_threshold=static_threshold)
+
+    precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext    
     with torch.no_grad():
         with precision_scope("cuda"):
             with model.ema_scope():
@@ -290,8 +376,10 @@ def txt2img(request_obj, model, device):
                                                     unconditional_conditioning=uc,
                                                     eta=ddim_eta,
                                                     x_T=start_codes,
-                                                    mask=mask,
-                                                    x0=x0)
+                                                    #mask=mask,
+                                                    # x0=x0
+                                                    img_callback = callback
+                                                    )
 
                 x_samples_ddim = model.decode_first_stage(samples_ddim)
                 x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
