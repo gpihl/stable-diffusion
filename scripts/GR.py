@@ -7,7 +7,7 @@ import random
 class GR:
     C = 4
     f = 8
-    precision = 'autocast'
+    precision = ''
     ddim_eta = 0.0
     strength = 0.75
     W = None
