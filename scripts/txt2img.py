@@ -24,6 +24,10 @@ from ldm.models.diffusion.plms import PLMSSampler
 from collections import namedtuple
 from omegaconf import OmegaConf
 from ldm.util import instantiate_from_config
+import librosa
+import cv2
+from scipy.fftpack import idct
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 class CFGDenoiser(torch.nn.Module):
     def __init__(self, model):
@@ -319,8 +323,8 @@ def txt2img(request_obj, model, device):
     scale = grs[0].scale
     shape = GR.GR.start_code_shape[1:]
     batch_size = len(grs)
-    sampler = KDiffusionSampler(model,'euler_ancestral') #DDIMSampler(model)
-    # sampler = DDIMSampler(model)
+    # sampler = KDiffusionSampler(model,'euler_ancestral') #DDIMSampler(model)
+    sampler = DDIMSampler(model)
 
     mask = None
     x0 = None
@@ -378,7 +382,7 @@ def txt2img(request_obj, model, device):
                                                     x_T=start_codes,
                                                     #mask=mask,
                                                     # x0=x0
-                                                    img_callback = callback
+                                                    # img_callback = callback
                                                     )
 
                 x_samples_ddim = model.decode_first_stage(samples_ddim)
@@ -414,16 +418,30 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
     steps_seq = GR.GR.get_interpolation_steps_seq(start_codes, conditionings, frames_per_degree)
 
-    start_codes = GR.GR.get_interpolated_start_codes(grs, steps_seq)
+    start_codes = GR.GR.get_interpolated_start_codes(grs, steps_seq).cpu()
+
     conditionings = GR.GR.get_interpolated_conditionings(grs, steps_seq)
 
-    images = []
+    visualizer_imgs = get_visualizer_imgs()
+
+    # Convert each numpy array to a (1, 4, 64, 64) torch tensor
+    torch_arrays = [torch.from_numpy(np_array)[None, :] for np_array in visualizer_imgs]
+
+    # Perform element-wise multiplication for each corresponding tensor and array
+    results = [0.97 * torch_tensor + 0.03 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
+
+    # Stack the results back into a single tensor
+    start_codes = torch.stack(results).cuda()
+
+    time.sleep(1)
+
     ddim_steps = grs[0].ddim_steps
     scale = grs[0].scale
     ddim_eta = GR.GR.ddim_eta    
     shape = GR.GR.start_code_shape[1:]
     #batch_size = 15
     sampler = DDIMSampler(model)
+    # sampler = KDiffusionSampler(model,'euler_ancestral')
 
     filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
 
@@ -457,6 +475,85 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
     print('finished video')
     video_out.close()
+
+    # time.sleep(5)
+
+    # # Assuming 'filename' is your output video file and 'audio.mp3' is your audio file
+    # video = VideoFileClip(filename)
+    # audio = AudioFileClip('DarkForcesShorter2.mp3')
+
+    # # Overlay the audio. If the audio is longer than the video it will be truncated.
+    # final_audio = audio.subclip(0, video.duration)
+
+    # # Set the audio of the video clip
+    # video = video.set_audio(final_audio)
+
+    # # Write the result to a file. Replace 'final.mp4' with the output filename you want.
+    # video.write_videofile(filename, codec='libx264')
+
     video = open(filename, "rb")
     video = video.read()
     return video
+
+def get_visualizer_imgs():
+    # Load the audio file
+    audiofilename = 'DarkForcesShorter2.mp3'
+    y, sr = librosa.load(audiofilename)
+    y = y[:10*sr]
+
+    n_fft = 4096
+    fps = 30
+    D = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=sr//fps))
+    res = 4
+    width = res * 16
+    height = res * 16
+    scaling = (n_fft / width) * 0.7
+
+    # Initialize minimum and maximum values
+    min_val = np.inf
+    max_val = -np.inf
+
+    # Initialize a list to store all the IDCT results
+    idct_results = []
+
+    # First pass: compute the global minimum and maximum and store the IDCT results
+    for i in range(D.shape[1]):
+        frame = D[:, i]
+        idct_result = idct(frame)
+        idct_results.append(idct_result)  # Store the IDCT result
+        min_val = min(min_val, np.min(idct_result))
+        max_val = max(max_val, np.max(idct_result))
+
+    # Second pass: generate each frame and write it to the video
+    images = []
+    for idct_result in idct_results:
+        # Normalize using the global minimum and maximum
+        idct_result = (idct_result - min_val) / (max_val - min_val)
+        
+        # Create a grid of pixel coordinates
+        y, x = np.ogrid[-height//2:height//2, -width//2:width//2]
+        x = x.astype(np.float64) * scaling
+        y = y.astype(np.float64) * scaling
+
+        # Convert pixel coordinates to polar coordinates
+        radius = np.hypot(x, y).round().astype(np.int32)
+
+        # Use the radius as an index into the IDCT result, handling out-of-bounds indices
+        radius[radius >= len(idct_result)] = len(idct_result) - 1
+        image = idct_result[radius]
+
+        # image = np.ones((64, 64)).astype(np.float32)        
+        images.append(image)
+
+    # Step 1: Convert the list to a higher-dimensional numpy array
+    array = np.stack(images)
+
+    # Step 2: Normalize the array
+    mean = np.mean(array)
+    std = np.std(array)
+    normalized_array = (array - mean) / std
+
+    # Step 3: Convert the normalized array back to a list of arrays
+    images = [normalized_array[i] for i in range(normalized_array.shape[0])]        
+
+    return images
