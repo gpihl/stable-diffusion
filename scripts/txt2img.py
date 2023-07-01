@@ -8,7 +8,6 @@ import math
 import imp
 import base64
 import subprocess
-import kdiffusion.k_diffusion as K
 from io import BytesIO
 from . import GR
 from PIL import Image, ImageOps, ImageFilter
@@ -40,24 +39,6 @@ class CFGDenoiser(torch.nn.Module):
         cond_in = torch.cat([uncond, cond])
         uncond, cond = self.inner_model(x_in, sigma_in, cond=cond_in).chunk(2)
         return uncond + (cond - uncond) * cond_scale
-
-class KDiffusionSampler:
-    def __init__(self, m, sampler):
-        self.model = m
-        self.model_wrap = K.external.CompVisDenoiser(m)
-        self.schedule = sampler
-
-
-    def get_sampler_name(self):
-        return self.schedule
-    def sample(self, S, conditioning, batch_size, shape, verbose, unconditional_guidance_scale, unconditional_conditioning, eta, x_T, img_callback):
-        sigmas = self.model_wrap.get_sigmas(S)
-        x = x_T * sigmas[0]
-        model_wrap_cfg = CFGDenoiser(self.model_wrap)
-
-        samples_ddim = K.sampling.__dict__[f'sample_{self.schedule}'](model_wrap_cfg, x, sigmas, extra_args={'cond': conditioning, 'uncond': unconditional_conditioning, 'cond_scale': unconditional_guidance_scale}, disable=False, callback=img_callback)
-
-        return samples_ddim, None
 
 class ObjectFromDict(dict):
     def __init__(self, j):
