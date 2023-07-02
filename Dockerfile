@@ -8,7 +8,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 
-COPY . /workspace/stable-diffusion
+COPY ./environment.yaml /workspace/stable-diffusion/environment.yaml
+COPY ./setup.py /workspace/stable-diffusion/setup.py
 WORKDIR /workspace/stable-diffusion
 RUN conda env create -f environment.yaml && \
     conda clean -afy && \
@@ -16,31 +17,15 @@ RUN conda env create -f environment.yaml && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN echo "conda activate ldm" >> ~/.bashrc
-SHELL ["/bin/bash", "--login", "-c"]
+# Install additional packages in the ldm environment
+RUN /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate ldm && pip install librosa moviepy"
+WORKDIR /workspace
+RUN rm -rf /workspace/stable-diffusion && git clone https://gpihl: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@github.com/gpihl/stable-diffusion.git
 
-WORKDIR /workspace/stable-diffusion/Real-ESRGAN
-RUN pip install basicsr && \
-    pip install facexlib && \
-    pip install gfpgan && \
-    pip install -r requirements.txt && \
-    python setup.py develop && \
-    pip install opencv-python && \
-    apt update && \    
-    apt install -y libsm6 libxext6 && \
-    apt-get install -y libxrender-dev && \
-    conda clean -afy && \
-    pip cache purge && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
+COPY ./model.ckpt /workspace/stable-diffusion/models/ldm/stable-diffusion-v1/model.ckpt
 
-RUN python inference_realesrgan.py -n RealESRGAN_x4plus -i inputs/0014.png --face_enhance
+RUN /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate ldm && pip install taming-transformers-rom1504 clip"
 
-WORKDIR /workspace/stable-diffusion
-
-RUN echo 'hej'
-RUN git pull
 ADD start.sh /start.sh
 RUN chmod a+x /start.sh
 CMD [ "/start.sh" ]

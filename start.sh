@@ -1,4 +1,4 @@
-#!/bin/bash --login
+#!/bin/bash
 
 echo "pod started"
 
@@ -8,13 +8,14 @@ then
     chmod 700 ~/.ssh
     cd ~/.ssh
     echo $PUBLIC_KEY >> authorized_keys
-    chmod 700 -R ~/.ssh
+    chmod 600 authorized_keys
     cd /
     service ssh start
 fi
 
 cd /workspace/stable-diffusion/
-conda activate ldm
+git pull
+source /opt/conda/etc/profile.d/conda.sh && conda activate ldm
 python server.py 8888
 
 sleep infinity
