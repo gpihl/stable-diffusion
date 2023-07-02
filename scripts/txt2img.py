@@ -405,13 +405,13 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
     conditionings = GR.GR.get_interpolated_conditionings(grs, steps_seq)
 
-    visualizer_imgs = get_visualizer_imgs(fps)
+    visualizer_imgs = get_visualizer_imgs(fps, W, H)
 
     # Convert each numpy array to a (1, 4, 64, 64) torch tensor
     torch_arrays = [torch.from_numpy(np_array)[None, :] for np_array in visualizer_imgs]
 
     # Perform element-wise multiplication for each corresponding tensor and array
-    results = [0.97 * torch_tensor + 0.03 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
+    results = [0.98 * torch_tensor + 0.02 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
 
     # Stack the results back into a single tensor
     start_codes = torch.stack(results).cuda()
@@ -495,7 +495,7 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     video = video.read()
     return video
 
-def get_visualizer_imgs(fps):
+def get_visualizer_imgs(fps, W, H):
     # Load the audio file
     audiofilename = 'DarkForcesShorter2.mp3'
     y, sr = librosa.load(audiofilename)
@@ -503,9 +503,9 @@ def get_visualizer_imgs(fps):
 
     n_fft = 4096
     D = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=sr//fps))
-    res = 4
-    width = res * 16
-    height = res * 16
+    # res = 4
+    width = W / 8
+    height = H / 8
     scaling = (n_fft / width) * 0.7
 
     # Initialize minimum and maximum values
