@@ -386,6 +386,8 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     imp.reload(GR)
     print('starting to interpolate')
     grs = []
+    W = int(request_objs[0].W)
+    H = int(request_objs[0].H)
     for request_obj in request_objs:
         gr = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)[0]
         grs.append(gr)
@@ -426,8 +428,11 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
     filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
 
-    video_out = imageio.get_writer(filename, mode='I', fps=fps, codec='libx264')
+    # video_out = imageio.get_writer(filename, mode='I', fps=fps, codec='libx264')
     
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+    video = cv2.VideoWriter(filename, fourcc, fps, (W, H), isColor=True)
+
     start_codes = unflatten(start_codes, batch_size)
     conditionings = unflatten(conditionings, batch_size)
 
@@ -452,16 +457,28 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
                     for x_sample in x_samples_ddim:
                         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-                        video_out.append_data(x_sample)
+                        video.write(x_sample.astype(np.uint8))
+                        # video_out.append_data(x_sample)
 
     print('finished video')
-    video_out.close()
+    # video_out.close()
+    video.release()
 
-    # time.sleep(5)
+    # Load video and audio with moviepy
+    videoclip = VideoFileClip(filename)
+    audioclip = AudioFileClip('DarkForcesShorter2.mp3')
+
+    # Add audio to the video clip
+    videoclip = videoclip.set_audio(audioclip)
+
+    # Write the result to a file
+    videoclip.write_videofile(filename + '-final')
+
+    time.sleep(5)
 
     # # Assuming 'filename' is your output video file and 'audio.mp3' is your audio file
     # video = VideoFileClip(filename)
-    # audio = AudioFileClip('DarkForcesShorter2.mp3')
+    # audio = AudioFileClip()
 
     # # Overlay the audio. If the audio is longer than the video it will be truncated.
     # final_audio = audio.subclip(0, video.duration)
@@ -472,7 +489,7 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     # # Write the result to a file. Replace 'final.mp4' with the output filename you want.
     # video.write_videofile(filename, codec='libx264')
 
-    video = open(filename, "rb")
+    video = open(filename + '-final', "rb")
     video = video.read()
     return video
 
