@@ -20,7 +20,7 @@ RUN conda env create -f environment.yaml && \
 # Install additional packages in the ldm environment
 RUN /bin/bash -c "source /opt/conda/etc/profile.d/conda.sh && conda activate ldm && pip install librosa moviepy"
 WORKDIR /workspace
-RUN rm -rf /workspace/stable-diffusion && git clone https://gpihl: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@github.com/gpihl/stable-diffusion.git
+RUN rm -rf /workspace/stable-diffusion && git clone https://gpihl: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@github.com/gpihl/stable-diffusion.git
 
 COPY ./model.ckpt /workspace/stable-diffusion/models/ldm/stable-diffusion-v1/model.ckpt
 
