@@ -405,7 +405,7 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
     conditionings = GR.GR.get_interpolated_conditionings(grs, steps_seq)
 
-    visualizer_imgs = get_visualizer_imgs()
+    visualizer_imgs = get_visualizer_imgs(fps)
 
     # Convert each numpy array to a (1, 4, 64, 64) torch tensor
     torch_arrays = [torch.from_numpy(np_array)[None, :] for np_array in visualizer_imgs]
@@ -457,6 +457,7 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
 
                     for x_sample in x_samples_ddim:
                         x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                        x_sample = x_sample[:, :, [2, 1, 0]]
                         video.write(x_sample.astype(np.uint8))
                         # video_out.append_data(x_sample)
 
@@ -467,12 +468,13 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     # Load video and audio with moviepy
     videoclip = VideoFileClip(filename)
     audioclip = AudioFileClip('DarkForcesShorter2.mp3')
+    final_audio = audioclip.subclip(0, videoclip.duration)
 
     # Add audio to the video clip
-    videoclip = videoclip.set_audio(audioclip)
+    videoclip = videoclip.set_audio(final_audio)
 
     # Write the result to a file
-    videoclip.write_videofile(filename + '-final')
+    videoclip.write_videofile('final-' + filename)
 
     time.sleep(5)
 
@@ -489,18 +491,17 @@ def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model
     # # Write the result to a file. Replace 'final.mp4' with the output filename you want.
     # video.write_videofile(filename, codec='libx264')
 
-    video = open(filename + '-final', "rb")
+    video = open('final-' + filename, "rb")
     video = video.read()
     return video
 
-def get_visualizer_imgs():
+def get_visualizer_imgs(fps):
     # Load the audio file
     audiofilename = 'DarkForcesShorter2.mp3'
     y, sr = librosa.load(audiofilename)
     y = y[:10*sr]
 
     n_fft = 4096
-    fps = 30
     D = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=sr//fps))
     res = 4
     width = res * 16
