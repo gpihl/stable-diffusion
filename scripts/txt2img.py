@@ -382,6 +382,96 @@ def txt2img(request_obj, model, device):
     torch.cuda.empty_cache()    
     return images, GR.GR.get_new_variance_vectors(grs)
 
+def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_size, model, device):
+    imp.reload(GR)
+    print('starting to interpolate')
+    grs = []
+    W = int(request_objs[0].W)
+    H = int(request_objs[0].H)
+    for request_obj in request_objs:
+        gr = GR.GR.create_generation_requests(request_obj, model, device, seed_everything)[0]
+        grs.append(gr)
+
+    start_codes = GR.GR.get_start_codes_batch(grs)
+    conditionings = GR.GR.get_conditionings_batch(grs)
+    frames_per_degree = fps / degrees_per_second
+    steps_seq = GR.GR.get_interpolation_steps_seq(start_codes, conditionings, frames_per_degree)
+    conditionings = GR.GR.get_interpolated_conditionings(grs, steps_seq)
+
+    # visualizer_imgs = get_visualizer_imgs()
+    # # Convert each numpy array to a (1, 4, 64, 64) torch tensor
+    # torch_arrays = [torch.from_numpy(np_array)[None, :] for np_array in visualizer_imgs]
+
+    # # Perform element-wise multiplication for each corresponding tensor and array
+    # results = [0.97 * torch_tensor + 0.03 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
+
+    # Stack the results back into a single tensor
+    # start_codes = torch.stack(results).cuda()
+
+    ddim_steps = grs[0].ddim_steps
+    scale = grs[0].scale
+    ddim_eta = GR.GR.ddim_eta    
+    shape = GR.GR.start_code_shape[1:]
+    sampler = DDIMSampler(model)
+    filename = 'test' + str(round(time.time() * 10000000) % 100000) + '.mp4'
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+    video = cv2.VideoWriter(filename, fourcc, fps, (W, H), isColor=True)
+    batch_size = 1
+    curr_latent = None
+
+    precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext    
+    with torch.no_grad():
+        with precision_scope("cuda"):
+            with model.ema_scope():
+                uc = model.get_learned_conditioning(batch_size * [""])
+
+                sample_ddim, _ = sampler.sample(S=ddim_steps,
+                                                    conditioning=conditionings,
+                                                    batch_size=batch_size,
+                                                    shape=shape,
+                                                    verbose=False,
+                                                    unconditional_guidance_scale=scale,
+                                                    unconditional_conditioning=uc,
+                                                    eta=ddim_eta,
+                                                    x_T=grs[0].start_code,
+                                                    )
+
+                curr_latent = sample_ddim
+                x_sample_ddim = model.decode_first_stage(sample_ddim)
+                x_sample_ddim = torch.clamp((x_sample_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                x_sample = 255. * rearrange(x_sample_ddim.cpu().numpy(), 'c h w -> h w c')                
+                x_sample = x_sample[:, :, [2, 1, 0]]
+                video.write(x_sample.astype(np.uint8))
+
+                sampler.make_schedule(ddim_num_steps=ddim_steps, ddim_eta=ddim_eta, verbose=False)
+                t_enc = int(0.2 * ddim_steps)
+
+                for conditioning in tqdm(conditionings, desc="data", total=len(conditionings)):
+                    # encode (scaled latent)
+                    z_enc = sampler.stochastic_encode(curr_latent, torch.tensor([t_enc]*batch_size).to(device))
+                    # decode it
+                    samples = sampler.decode(z_enc, conditioning, t_enc, unconditional_guidance_scale=scale,
+                                                unconditional_conditioning=uc,)
+
+                    curr_latent = samples
+                    x_samples_ddim = model.decode_first_stage(samples)
+                    x_samples_ddim = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0)
+                    for x_sample in x_samples_ddim:
+                        x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                        x_sample = x_sample[:, :, [2, 1, 0]]
+                        video.write(x_sample.astype(np.uint8))                        
+
+    print('finished video')
+    video.release()
+    videoclip = VideoFileClip(filename)
+    audioclip = AudioFileClip('DarkForcesShorter2.mp3')
+    videoclip = videoclip.set_audio(audioclip)
+    videoclip.write_videofile(filename + '-final')
+    time.sleep(1)
+    video = open(filename + '-final', "rb")
+    video = video.read()
+    return video    
+
 def interpolate_prompts(request_objs, fps, degrees_per_second, batch_size, model, device):
     imp.reload(GR)
     print('starting to interpolate')
@@ -499,7 +589,6 @@ def get_visualizer_imgs(fps, W, H):
     # Load the audio file
     audiofilename = 'DarkForcesShorter2.mp3'
     y, sr = librosa.load(audiofilename)
-    y = y[:10*sr]
 
     n_fft = 4096
     D = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=sr//fps))

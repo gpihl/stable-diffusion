@@ -191,7 +191,7 @@ class S(BaseHTTPRequestHandler):
             p['prompt'] = d(p['prompt'])
 
         request_objs = list(map(ObjectFromDict, data.params))
-        video = scripts.txt2img.interpolate_prompts(request_objs, data.fps, data.degrees_per_second, data.batch_size, self.server.model, self.server.device)
+        video = scripts.txt2img.interpolate_prompts_deforum(request_objs, data.fps, data.degrees_per_second, data.batch_size, self.server.model, self.server.device)
         #resp.video = video
         resp = gzipencode(video)
         self._set_post_response("application/octet-stream")
