@@ -398,16 +398,15 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
     steps_seq = GR.GR.get_interpolation_steps_seq(start_codes, conditionings, frames_per_degree)
     conditionings = GR.GR.get_interpolated_conditionings(grs, steps_seq)
 
-    # visualizer_imgs = get_visualizer_imgs()
-    # # Convert each numpy array to a (1, 4, 64, 64) torch tensor
+    # visualizer_imgs = get_visualizer_imgs(fps, W, H)
+    # Convert each numpy array to a (1, 4, 64, 64) torch tensor
     # torch_arrays = [torch.from_numpy(np_array)[None, :] for np_array in visualizer_imgs]
-
     # # Perform element-wise multiplication for each corresponding tensor and array
-    # results = [0.97 * torch_tensor + 0.03 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
-
-    # Stack the results back into a single tensor
+    # results = [0.98 * torch_tensor + 0.02 * torch_array for torch_tensor, torch_array in zip(start_codes, torch_arrays)]
+    # # Stack the results back into a single tensor
     # start_codes = torch.stack(results).cuda()
-    strength = 0.2
+
+    strength = 0.4
     ddim_steps = grs[0].ddim_steps
     scale = grs[0].scale
     ddim_eta = GR.GR.ddim_eta    
@@ -419,6 +418,11 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
     batch_size = 1
     curr_latent = None
 
+    print(conditionings.shape)
+    conditionings = unflatten(conditionings, batch_size)
+
+    speed = 0.9
+
     precision_scope = autocast if GR.GR.precision=="autocast" else nullcontext    
     with torch.no_grad():
         with precision_scope("cuda"):
@@ -426,7 +430,7 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
                 uc = model.get_learned_conditioning(batch_size * [""])
 
                 sample_ddim, _ = sampler.sample(S=ddim_steps,
-                                                    conditioning=conditionings,
+                                                    conditioning=conditionings[0],
                                                     batch_size=batch_size,
                                                     shape=shape,
                                                     verbose=False,
@@ -439,16 +443,24 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
                 curr_latent = sample_ddim
                 x_sample_ddim = model.decode_first_stage(sample_ddim)
                 x_sample_ddim = torch.clamp((x_sample_ddim + 1.0) / 2.0, min=0.0, max=1.0)
-                x_sample = 255. * rearrange(x_sample_ddim.cpu().numpy(), 'c h w -> h w c')                
-                x_sample = x_sample[:, :, [2, 1, 0]]
-                video.write(x_sample.astype(np.uint8))
+                for x_sample in x_sample_ddim:
+                    x_sample = 255. * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                    x_sample = x_sample[:, :, [2, 1, 0]]
+                    video.write(x_sample.astype(np.uint8))
 
                 sampler.make_schedule(ddim_num_steps=ddim_steps, ddim_eta=ddim_eta, verbose=False)
                 t_enc = int(strength * ddim_steps)
 
+                curr_enc = None
+
                 for conditioning in tqdm(conditionings, desc="data", total=len(conditionings)):
                     # encode (scaled latent)
                     z_enc = sampler.stochastic_encode(curr_latent, torch.tensor([t_enc]*batch_size).to(device))
+                    if curr_enc is None:
+                        curr_enc = z_enc
+                    
+                    z_enc = speed * z_enc + (1.0 - speed) * curr_enc
+                    curr_enc = z_enc
                     # decode it
                     samples = sampler.decode(z_enc, conditioning, t_enc, unconditional_guidance_scale=scale,
                                                 unconditional_conditioning=uc,)
@@ -463,12 +475,15 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
 
     print('finished video')
     video.release()
+
+    # Load video and audio with moviepy
     videoclip = VideoFileClip(filename)
     audioclip = AudioFileClip('DarkForcesShorter2.mp3')
-    videoclip = videoclip.set_audio(audioclip)
-    videoclip.write_videofile(filename + '-final')
+    final_audio = audioclip.subclip(0, videoclip.duration)
+    videoclip = videoclip.set_audio(final_audio)
+    videoclip.write_videofile('final-' + filename)
     time.sleep(1)
-    video = open(filename + '-final', "rb")
+    video = open('final-' + filename, "rb")
     video = video.read()
     return video    
 
