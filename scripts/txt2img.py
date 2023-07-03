@@ -407,7 +407,7 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
 
     # Stack the results back into a single tensor
     # start_codes = torch.stack(results).cuda()
-
+    strength = 0.2
     ddim_steps = grs[0].ddim_steps
     scale = grs[0].scale
     ddim_eta = GR.GR.ddim_eta    
@@ -444,7 +444,7 @@ def interpolate_prompts_deforum(request_objs, fps, degrees_per_second, batch_siz
                 video.write(x_sample.astype(np.uint8))
 
                 sampler.make_schedule(ddim_num_steps=ddim_steps, ddim_eta=ddim_eta, verbose=False)
-                t_enc = int(0.2 * ddim_steps)
+                t_enc = int(strength * ddim_steps)
 
                 for conditioning in tqdm(conditionings, desc="data", total=len(conditionings)):
                     # encode (scaled latent)
